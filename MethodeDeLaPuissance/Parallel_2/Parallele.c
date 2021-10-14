@@ -83,16 +83,14 @@ int main(int argc, char **argv)
         perror("impossible d'allouer le vecteur X");
         exit(1);
     }
-    
-    //if (my_rank==0){        
-        Y = malloc(n * sizeof(double));
+         
+    Y = malloc(n * sizeof(double));
         
-        if (Y == NULL)
-        {
-            perror("impossible d'allouer le vecteur Y");
-            exit(1);
-        }
-    //}
+    if (Y == NULL)
+    {
+        perror("impossible d'allouer le vecteur Y");
+        exit(1);
+    }
 
     /*** initialisation de x ***/
     
@@ -167,31 +165,29 @@ int main(int argc, char **argv)
         MPI_Allreduce(&somme_carres, &somme_carres_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les somme_carres dans somme_carres_total
         MPI_Allgather(morceau_Ax, nb_ligne, MPI_DOUBLE, Y, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD);
 
-        //if (my_rank==0){
-            norm2Ax = sqrt(somme_carres_total);
-            double inv_norm2Ax = 1.0 / norm2Ax;
-            
-            
-            for (i = 0; i < n; i++)
-            {
-                Y[i] *= inv_norm2Ax;
-            }
-            
-            //error <--- ||x - y||
-            error = 0;
-            for (i = 0; i < n; i++)
-            {
-                delta = X[i] - Y[i];
-                error += delta * delta;
-            }
-            error = sqrt(error);
-            
-            // x <--> y
-            double * tmp = X; X = Y; Y = tmp; 
-            
-            n_iterations++;
-        //}
 
+        norm2Ax = sqrt(somme_carres_total);
+        double inv_norm2Ax = 1.0 / norm2Ax;
+            
+            
+        for (i = 0; i < n; i++)
+        {
+            Y[i] *= inv_norm2Ax;
+        }
+            
+        //error <--- ||x - y||
+        error = 0;
+        for (i = 0; i < n; i++)
+        {
+            delta = X[i] - Y[i];
+            error += delta * delta;
+        }
+        error = sqrt(error);
+            
+        // x <--> y
+        double * tmp = X; X = Y; Y = tmp; 
+            
+        n_iterations++;
         
         /*Debug : Affichage des variables dans le processus 0 et le processus 1*/
         if (debug)
