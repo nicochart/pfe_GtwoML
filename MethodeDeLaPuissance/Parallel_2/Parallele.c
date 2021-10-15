@@ -63,10 +63,14 @@ int main(int argc, char **argv)
     }
     n = atoll(argv[1]);
     size = n * n * sizeof(double);
-    printf("taille de la matrice : %.3f G\n", size / 1073741824.);
+    if (my_rank==0)
+    {
+        printf("taille totale de la matrice : %.3f G\n", size / 1073741824.);
+    }
     int nb_ligne = n/p; //nombre de lignes par bloc
     int count = nb_ligne*n; //nombre d’éléments par bloc
-
+    printf("taille de la matrice dans le processus %i : %.3f G\n", my_rank, count / 1073741824.);
+    
     /*** allocation de la matrice et des vecteurs ***/
     morceauA = (double *)malloc(count * sizeof(double));
     if (morceauA == NULL)
@@ -107,18 +111,6 @@ int main(int argc, char **argv)
     for (i = my_rank * nb_ligne; i < (my_rank + 1) * nb_ligne; i++)
     {
         init_ligne(morceauA - (my_rank * nb_ligne * n), i, n);
-    }
-    
-    if (my_rank==0)
-    {
-        printf("A[0] = %g |",morceauA[0]);
-        printf("A[1] = %g \n",morceauA[1]);
-    }
-    if (my_rank==1)
-    {
-        printf("nbligne = %i\n",nb_ligne);
-        printf("A[1048576] = %g |",morceauA[0]);
-        printf("A[1048577] = %g\n",morceauA[1]);
     }
     
     double somme_carres,sc,norm2Ax;
