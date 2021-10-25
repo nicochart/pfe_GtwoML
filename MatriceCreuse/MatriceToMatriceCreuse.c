@@ -1,4 +1,4 @@
-/*Changement de stockage d'une matrice carrée à n elements en (stockée normalement) en stockage pour matrice creuse*/
+/*Changement de stockage d'une matrice carrée à n*n elements (stockée normalement) en stockage pour matrice creuse (on ne stock pas les 0)*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -48,6 +48,11 @@ int cpt_nb_zeros_matrix(double *M, int size)
 
 void fill_sparce_matrix(double *M, int *Row, int *Column, double *Value, int n)
 {
+    /*
+    Traduit la matrice stockée dans M (de taille n*n) en matrice creuse dans les recteurs Row, Column et Value
+    Le vecteur Row est de taille n (nombre de lignes)
+    Les vecteurs Column (indices de colonne) et Value (valeur) sont de taille "nombre d'éléments non nulles dans la matrice".
+    */
     int i,j,nb = 0;
     for (i=0;i<n;i++)
     {
