@@ -1,5 +1,5 @@
 /* indent -nfbs -i4 -nip -npsl -di0 -nut iterated_seq.c */
-/* Auteur: C. Bouillaguet et P. Fortin (Univ. Lille) + N. Hochart (Polytech) code Parallèle */ 
+/* Auteur: C. Bouillaguet et P. Fortin (Univ. Lille) + N. Hochart, H. Aillerie (Polytech) code Parallèle */ 
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -12,7 +12,8 @@
 #define PRNG_2   0x024719D0275ll
 #define RANGE    101
 
-double my_gettimeofday(){
+double my_gettimeofday()
+{
   struct timeval tmp_time;
   gettimeofday(&tmp_time, NULL);
   return tmp_time.tv_sec + (tmp_time.tv_usec * 1.0e-6L);
@@ -48,16 +49,21 @@ int main(int argc, char **argv)
     MPI_Init(&argc,&argv);
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    
     int debug = 0; //mettre à 1 pour un affichage plus détaillé qui permet de voir si les Bcast fonctionnent correctement
-    //printf("nb thread : %d\n",omp_get_num_procs());
-    int nbThreadProcessus = 2; //(int) omp_get_num_procs()/p;
-    //printf("nbThreadProcessus : %d\n",nbThreadProcessus);
     long i, j, n;
     long long size;
     double norm, error, start_time, total_time, delta;
     double *morceauA, *X, *Y;
+    double *tmp; //pointeur temporaire qui permettra d'échanger X et Y
     int n_iterations;
     FILE *output;
+    
+    /*Choix du nombre de Thread utilisé par Processus*/
+    //pour le moment fixé à 2 car ceci semble être le meilleur choix pour notre utilisation
+    //printf("nb thread : %d\n",omp_get_num_procs());
+    int nbThreadProcessus = 2; //(int) omp_get_num_procs()/p;
+    //printf("nbThreadProcessus : %d\n",nbThreadProcessus);
 
     if (argc < 2)
     {
@@ -74,6 +80,10 @@ int main(int argc, char **argv)
     int count = nb_ligne*n; //nombre d’éléments par bloc
     printf("taille de la matrice dans le processus %i : %.3f G\n", my_rank, count / 1073741824.);
     
+    double somme_carres,somme_carres_total,sc,norm2Ax,inv_norm2Ax; //variables utilisées dans le code
+    double morceau_Ax[nb_ligne]; //tableau qui contiendra les morceaux de Y dans les processus
+    
+    
     /*** allocation de la matrice et des vecteurs ***/
     morceauA = (double *)malloc(count * sizeof(double));
     if (morceauA == NULL)
@@ -84,18 +94,12 @@ int main(int argc, char **argv)
     }
     
     X = malloc(n * sizeof(double));
-    
-    if (X == NULL)
-    {
-        perror("impossible d'allouer le vecteur X");
-        exit(1);
-    }
-         
     Y = malloc(n * sizeof(double));
-        
-    if (Y == NULL)
+    
+    if (X == NULL || Y == NULL)
     {
-        perror("impossible d'allouer le vecteur Y");
+        fprintf(stderr,"impossible d'allouer le vecteur X ou le vecteur Y sur le processus %i",my_rank);
+        perror("");
         exit(1);
     }
 
@@ -116,9 +120,6 @@ int main(int argc, char **argv)
         init_ligne(morceauA - (my_rank * nb_ligne * n), i, n);
     }
     
-    double somme_carres,sc,norm2Ax;
-    double morceau_Ax[nb_ligne];
-    
     start_time = my_gettimeofday();
     error = INFINITY;
     n_iterations = 0;
@@ -133,6 +134,7 @@ int main(int argc, char **argv)
             for(i=0; i<nb_ligne; i++)
             {
                 sc = 0; //scalaire
+                //Instruction OpenMP : Parallélisation de la boucle for sur nbThreadProcessus threads. On indique ce que l'on fait : une reduction, une somme (+) avec la variable sc
                 #pragma omp parallel for num_threads(nbThreadProcessus) reduction(+ : sc)
                 for (j=0; j<n; j++)
                 {
@@ -148,6 +150,7 @@ int main(int argc, char **argv)
             for(i=0; i<nb_ligne; i++)
             {
                 sc = 0; //scalaire
+                //Instruction OpenMP : Parallélisation de la boucle for sur nbThreadProcessus threads. On indique ce que l'on fait : une reduction, une somme (+) avec la variable sc
                 #pragma omp parallel for num_threads(nbThreadProcessus) reduction(+ : sc)
                 for (j=0; j<n; j++)
                 {
@@ -158,13 +161,12 @@ int main(int argc, char **argv)
             }
         }
         
-        double somme_carres_total;
         MPI_Allreduce(&somme_carres, &somme_carres_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les somme_carres dans somme_carres_total
         MPI_Allgather(morceau_Ax, nb_ligne, MPI_DOUBLE, Y, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD);
 
 
         norm2Ax = sqrt(somme_carres_total);
-        double inv_norm2Ax = 1.0 / norm2Ax;
+        inv_norm2Ax = 1.0 / norm2Ax;
             
             
         for (i = 0; i < n; i++)
@@ -182,7 +184,7 @@ int main(int argc, char **argv)
         error = sqrt(error);
             
         // x <--> y
-        double * tmp = X; X = Y; Y = tmp; 
+        tmp = X; X = Y; Y = tmp; 
             
         n_iterations++;
         
