@@ -168,7 +168,7 @@ int main(int argc, char **argv)
         norm2Ax = sqrt(somme_carres_total);
         inv_norm2Ax = 1.0 / norm2Ax;
             
-            
+        #pragma omp parallel for num_threads(nbThreadProcessus)
         for (i = 0; i < n; i++)
         {
             Y[i] *= inv_norm2Ax;
@@ -176,6 +176,7 @@ int main(int argc, char **argv)
             
         //error <--- ||x - y||
         error = 0;
+        #pragma omp parallel for num_threads(nbThreadProcessus) reduction(+ : error)
         for (i = 0; i < n; i++)
         {
             delta = X[i] - Y[i];
