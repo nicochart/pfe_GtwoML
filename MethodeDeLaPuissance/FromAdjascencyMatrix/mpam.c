@@ -1,4 +1,4 @@
-/* Méthode de la puissance appliquée à une matrice d'adjascence générée aléatoirement */
+/* Méthode de la puissance appliquée à une matrice d'adjascence de taille n*n générée aléatoirement */
 /* N. Hochart */ 
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,29 +56,56 @@ int cpt_nb_zeros_matrix(int *M, int size)
     return compteur;
 }
 
-void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int n)
+void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int l, int c)
 {
     /*
-    Traduit la matrice stockée dans M (de taille n*n) en matrice creuse dans les recteurs Row, Column et Value
+    Traduit la matrice stockée dans M (de taille l*c) en matrice creuse dans les vecteurs Row, Column et Value
     Le vecteur Row est de taille n (nombre de lignes)
     Les vecteurs Column (indices de colonne) et Value (valeur) sont de taille "nombre d'éléments non nulles dans la matrice".
     */
     int i,j,nb = 0;
-    for (i=0;i<n;i++)
+    for (i=0;i<l;i++)
     {
         *(Row+i) = nb;
-        for (j=0;j<n;j++)
+        for (j=0;j<c;j++)
         {
-            if (*(M + i*n+j) != 0)
+            if (*(M + i*c+j) != 0)
             {
                 *(Column+nb) = j;
-                *(Value+nb) = *(M+i*n+j);
+                *(Value+nb) = *(M+i*c+j);
                 nb++;
             }
         }
     }
 }
 
+int get_sparce_matrix_value(int indl, int indc, int *Row, int *Column, int *Value, int len_values, int l, int c)
+{
+    /*Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value. l le nombre de lignes de la matrice (longueur du vecteur Row) et c le nombre de colonnes.*/
+    if (indl >= l || indc >= c)
+    {
+        perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
+        return -1;
+    }
+    
+    int i,nb_values; //nb_values est le nombre de valeurs dans la ligne
+    if (indl < l-1)
+    {
+        nb_values = Row[indl+1] - Row[indl];
+    }
+    else
+    {
+        nb_values = len_values - Row[indl];
+    }
+    for (i=Row[indl];i<Row[indl]+nb_values;i++)
+    {
+        if (Column[i] == indc)
+        {
+            return Value[i];
+        }
+    }
+    return 0;
+}
 
 int main(int argc, char **argv)
 {    
@@ -95,8 +122,9 @@ int main(int argc, char **argv)
     long long size;
     double norm, error, start_time, total_time, delta;
     int *morceauA;
+    int *Row,*Column,*Value;
     double *X, *Y, *tmp;
-    int n_iterations;
+    int n_iterations,len_values,nb_zeros;
     FILE *output;
 
     if (argc < 2)
@@ -179,6 +207,27 @@ int main(int argc, char **argv)
         }
     }
 
+    nb_zeros = cpt_nb_zeros_matrix(morceauA, count);
+    len_values = count - nb_zeros;
+
+    Row = (int *)malloc(n * sizeof(int));
+    Column = (int *)malloc(len_values * sizeof(int));
+    Value = (int *)malloc(len_values * sizeof(int));
+    
+    if (Row == NULL || Column == NULL || Value == NULL)
+    {
+        fprintf(stderr,"impossible d'allouer l'un des vecteurs de la matrice creuse sur le processus %i",my_rank);
+        perror("");
+        exit(1);
+    }
+    
+    fill_sparce_matrix(morceauA, Row, Column, Value, nb_ligne, n);
+    free(morceauA);
+    /*
+    Pour le moment, on passe par une matrice stockée normalement pour ensuite la "traduire" en matrice stockée comme une matrice creuse..
+    Ca ne serre donc "à rien", mais c'est un début. 
+    */
+    
     start_time = my_gettimeofday();
     error = INFINITY;
     n_iterations = 0;
@@ -195,7 +244,7 @@ int main(int argc, char **argv)
                 sc = 0; //scalaire
                 for (j=0; j<n; j++)
                 {
-                    sc += morceauA[i*n+j] * X[j];
+                    sc += get_sparce_matrix_value(i, j, Row, Column, Value, len_values, nb_ligne, n) * X[j];
                 }
                 morceau_Ax[i] = sc;
                 somme_carres  += sc * sc;
@@ -209,7 +258,7 @@ int main(int argc, char **argv)
                 sc = 0; //scalaire
                 for (j=0; j<n; j++)
                 {
-                    sc += morceauA[i*n+j] * X[j];
+                    sc += get_sparce_matrix_value(i, j, Row, Column, Value, len_values, nb_ligne, n) * X[j];
                 }
                 morceau_Ax[i] = sc;
                 somme_carres  += sc * sc;
@@ -285,6 +334,9 @@ int main(int argc, char **argv)
         free(Y);
     }
     free(morceauA);
+    free(Row);
+    free(Column);
+    free(Value);
     
     MPI_Finalize();
     return 0;
