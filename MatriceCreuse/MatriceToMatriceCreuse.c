@@ -7,6 +7,7 @@
 
 float random_between_0_and_1()
 {
+    /*Renvoie un nombre aléatoire entre 0 et 1. Permet de faire une décision aléatoire*/
     return (float) rand() / (float) RAND_MAX;
 }
 
@@ -89,7 +90,6 @@ int main(int argc, char **argv)
     size = n * n;
     A = (double *)malloc(size * sizeof(double));
     
-    random_between_0_and_1();
     init_matrix(A, n);
     
     for (i=0;i<n;i++)

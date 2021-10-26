@@ -8,13 +8,14 @@
 
 float random_between_0_and_1()
 {
+    /*Renvoie un nombre aléatoire entre 0 et 1. Permet de faire une décision aléatoire*/
     return (float) rand() / (float) RAND_MAX;
 }
 
 void init_matrix(int *M, int n)
 {
     /*Rempli la matrice M de taille n*n de nombres. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la matrice contient des 0*/
-    int i,j,tmp;
+    int i,j;
     
     for (i=0;i<n;i++)
     {
@@ -28,6 +29,24 @@ void init_matrix(int *M, int n)
             {
                 *(M + i*n+j) = 1;
             }
+        }
+    }
+}
+
+void init_row_matrix(int *M, int i, int n)
+{
+    /*Rempli n éléments de la ligne i de la matrice M. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la ligne sont des 0*/
+    int j;
+
+    for (j=0;j<n;j++)
+    {
+        if (random_between_0_and_1() > 0.5) //une chance sur deux de mettre un 0
+        {
+            *(M + i*n+j) = 0;
+        }
+        else
+        {
+            *(M + i*n+j) = 1;
         }
     }
 }
@@ -89,8 +108,11 @@ int main(int argc, char **argv)
     size = n * n;
     A = (int *)malloc(size * sizeof(int));
     
-    random_between_0_and_1();
-    init_matrix(A, n);
+    for (i=0;i<n;i++)
+    {
+        init_row_matrix(A, i, n);
+    }
+    
     
     for (i=0;i<n;i++)
     {
