@@ -214,12 +214,13 @@ int main(int argc, char **argv)
         exit(1);
     }
     
-    fill_sparce_matrix(morceauA, Row, Column, Value, nb_ligne, n); printf("Jusque là ça va après fill sparse matrix\n");
+    fill_sparce_matrix(morceauA, Row, Column, Value, nb_ligne, n);
     free(morceauA);
     /*
     Pour le moment, on passe par une matrice stockée normalement pour ensuite la "traduire" en matrice stockée comme une matrice creuse..
     Ca ne serre donc "à rien", mais c'est un début. 
     */
+    printf("taille de la matrice creuse dans le processus %i : %.3f G\n", my_rank, ((n+1) + 2 * len_values) * sizeof(int)/ 1073741824.);
     
     start_time = my_gettimeofday();
     error = INFINITY;
