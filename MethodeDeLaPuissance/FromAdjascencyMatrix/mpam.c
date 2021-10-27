@@ -60,7 +60,7 @@ void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int l, int c)
 {
     /*
     Traduit la matrice stockée dans M (de taille l*c) en matrice creuse dans les vecteurs Row, Column et Value
-    Le vecteur Row est de taille n (nombre de lignes)
+    Le vecteur Row est de taille n+1 (nombre de lignes + 1)
     Les vecteurs Column (indices de colonne) et Value (valeur) sont de taille "nombre d'éléments non nulles dans la matrice".
     */
     int i,j,nb = 0;
@@ -69,34 +69,29 @@ void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int l, int c)
         *(Row+i) = nb;
         for (j=0;j<c;j++)
         {
+            //printf("i,j = %i,%i : ",i,j);
             if (*(M + i*c+j) != 0)
             {
+                //printf("Valeur trouvée à l'indice %i*%i+%i = %i : %i écrit à l'indice %i\n",i,l,j,i*l+j,*(M+i*c+j),nb);
                 *(Column+nb) = j;
                 *(Value+nb) = *(M+i*c+j);
                 nb++;
             }
         }
     }
+    *(Row+l) = nb;
 }
 
 int get_sparce_matrix_value(int indl, int indc, int *Row, int *Column, int *Value, int len_values, int l, int c)
 {
-    /*Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value. l le nombre de lignes de la matrice (longueur du vecteur Row) et c le nombre de colonnes.*/
+    /*Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value. l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.*/
     if (indl >= l || indc >= c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
     }
-    
-    int i,nb_values; //nb_values est le nombre de valeurs dans la ligne
-    if (indl < l-1)
-    {
-        nb_values = Row[indl+1] - Row[indl];
-    }
-    else
-    {
-        nb_values = len_values - Row[indl];
-    }
+    int i;
+    int nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
         if (Column[i] == indc)
@@ -210,7 +205,7 @@ int main(int argc, char **argv)
     nb_zeros = cpt_nb_zeros_matrix(morceauA, count);
     len_values = count - nb_zeros;
 
-    Row = (int *)malloc(n * sizeof(int));
+    Row = (int *)malloc((n+1) * sizeof(int));
     Column = (int *)malloc(len_values * sizeof(int));
     Value = (int *)malloc(len_values * sizeof(int));
     
@@ -333,7 +328,6 @@ int main(int argc, char **argv)
     {
         free(Y);
     }
-    free(morceauA);
     free(Row);
     free(Column);
     free(Value);
