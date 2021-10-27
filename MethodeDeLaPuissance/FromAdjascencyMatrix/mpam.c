@@ -24,10 +24,10 @@ float random_between_0_and_1()
     return (float) rand() / (float) RAND_MAX;
 }
 
-void init_row_matrix(int *M, int i, int n)
+void init_row_matrix(int *M, long i, long n)
 {
     /*Rempli n éléments de la ligne i de la matrice M. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la ligne sont des 0*/
-    int j;
+    long j;
 
     for (j=0;j<n;j++)
     {
@@ -42,10 +42,10 @@ void init_row_matrix(int *M, int i, int n)
     }
 }
 
-int cpt_nb_zeros_matrix(int *M, int size)
+long cpt_nb_zeros_matrix(int *M, long long size)
 {
     /*Compte le nombre de 0 dans la matrice M à size elements*/
-    int compteur = 0;
+    long compteur = 0;
     for (int d=0;d<size;d++)
     {
         if (*(M+d) == 0)
@@ -56,23 +56,21 @@ int cpt_nb_zeros_matrix(int *M, int size)
     return compteur;
 }
 
-void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int l, int c)
+void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, long l, long c)
 {
     /*
     Traduit la matrice stockée dans M (de taille l*c) en matrice creuse dans les vecteurs Row, Column et Value
     Le vecteur Row est de taille n+1 (nombre de lignes + 1)
     Les vecteurs Column (indices de colonne) et Value (valeur) sont de taille "nombre d'éléments non nulles dans la matrice".
     */
-    int i,j,nb = 0;
+    long i,j,nb = 0;
     for (i=0;i<l;i++)
     {
         *(Row+i) = nb;
         for (j=0;j<c;j++)
         {
-            //printf("i,j = %i,%i : ",i,j);
             if (*(M + i*c+j) != 0)
             {
-                //printf("Valeur trouvée à l'indice %i*%i+%i = %i : %i écrit à l'indice %i\n",i,l,j,i*l+j,*(M+i*c+j),nb);
                 *(Column+nb) = j;
                 *(Value+nb) = *(M+i*c+j);
                 nb++;
@@ -82,7 +80,7 @@ void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, int l, int c)
     *(Row+l) = nb;
 }
 
-int get_sparce_matrix_value(int indl, int indc, int *Row, int *Column, int *Value, int len_values, int l, int c)
+int get_sparce_matrix_value(long indl, long indc, int *Row, int *Column, int *Value, long len_values, long l, long c)
 {
     /*Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value. l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.*/
     if (indl >= l || indc >= c)
@@ -90,8 +88,8 @@ int get_sparce_matrix_value(int indl, int indc, int *Row, int *Column, int *Valu
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
     }
-    int i;
-    int nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
+    long i;
+    long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
         if (Column[i] == indc)
@@ -113,13 +111,13 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   
     int debug = 0; //mettre à 1 pour un affichage plus détaillé qui permet de voir si les Bcast fonctionnent correctement
-    long i, j, n;
+    long i, j, n, len_values, nb_zeros;
     long long size;
     double norm, error, start_time, total_time, delta;
     int *morceauA;
     int *Row,*Column,*Value;
     double *X, *Y, *tmp;
-    int n_iterations,len_values,nb_zeros;
+    int n_iterations;
     FILE *output;
 
     if (argc < 2)
@@ -134,8 +132,8 @@ int main(int argc, char **argv)
     {
         printf("taille totale de la matrice : %.3f G\n", size / 1073741824.);
     }
-    int nb_ligne = n/p; //nombre de lignes par bloc
-    int count = nb_ligne*n; //nombre d’éléments par bloc
+    long nb_ligne = n/p; //nombre de lignes par bloc
+    long count = nb_ligne*n; //nombre d’éléments par bloc
     printf("taille de la matrice dans le processus %i : %.3f G\n", my_rank, count * sizeof(int)/ 1073741824.);
     
     double somme_carres,somme_carres_total,sc,norm2Ax,inv_norm2Ax;; //variables utilisées dans le code
@@ -216,7 +214,7 @@ int main(int argc, char **argv)
         exit(1);
     }
     
-    fill_sparce_matrix(morceauA, Row, Column, Value, nb_ligne, n);
+    fill_sparce_matrix(morceauA, Row, Column, Value, nb_ligne, n); printf("Jusque là ça va après fill sparse matrix\n");
     free(morceauA);
     /*
     Pour le moment, on passe par une matrice stockée normalement pour ensuite la "traduire" en matrice stockée comme une matrice creuse..

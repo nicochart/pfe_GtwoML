@@ -76,8 +76,8 @@ int main(int argc, char **argv)
     {
         printf("taille totale de la matrice : %.3f G\n", size / 1073741824.);
     }
-    int nb_ligne = n/p; //nombre de lignes par bloc
-    int count = nb_ligne*n; //nombre d’éléments par bloc
+    long nb_ligne = n/p; //nombre de lignes par bloc
+    long count = nb_ligne*n; //nombre d’éléments par bloc
     printf("taille de la matrice dans le processus %i : %.3f G\n", my_rank, count * sizeof(double)/ 1073741824.);
     
     double somme_carres,somme_carres_total,sc,norm2Ax,inv_norm2Ax; //variables utilisées dans le code

@@ -64,8 +64,8 @@ int main(int argc, char **argv)
     n = atoll(argv[1]);
     size = n * n * sizeof(double);
     if (my_rank == 0) {printf("taille totale de la matrice : %.3f G\n", size / 1073741824.);}
-    int nb_ligne = n/p; //nombre de lignes par bloc
-    int count = nb_ligne*n; //nombre d’éléments par bloc
+    long nb_ligne = n/p; //nombre de lignes par bloc
+    long count = nb_ligne*n; //nombre d’éléments par bloc
 
     /*** allocation de la matrice et des vecteurs ***/
     morceauA = (double *)malloc(count * sizeof(double));
