@@ -237,9 +237,9 @@ int main(int argc, char **argv)
             for(i=0; i<nb_ligne; i++)
             {
                 sc = 0; //scalaire
-                for (j=0; j<n; j++)
+                for (j=Row[i]; j<Row[i+1]; j++)
                 {
-                    sc += get_sparce_matrix_value(i, j, Row, Column, Value, len_values, nb_ligne, n) * X[j];
+                    sc += Value[j] * X[Column[j]];
                 }
                 morceau_Ax[i] = sc;
                 somme_carres  += sc * sc;
@@ -251,9 +251,9 @@ int main(int argc, char **argv)
             for(i=0; i<nb_ligne; i++)
             {
                 sc = 0; //scalaire
-                for (j=0; j<n; j++)
+                for (j=Row[i]; j<Row[i+1]; j++)
                 {
-                    sc += get_sparce_matrix_value(i, j, Row, Column, Value, len_values, nb_ligne, n) * X[j];
+                    sc += Value[j] * X[Column[j]];
                 }
                 morceau_Ax[i] = sc;
                 somme_carres  += sc * sc;
