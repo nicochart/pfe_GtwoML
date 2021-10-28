@@ -12,16 +12,19 @@ float random_between_0_and_1()
     return (float) rand() / (float) RAND_MAX;
 }
 
-void init_matrix(int *M, long l, long c)
+void init_matrix(int *M, long l, long c, int zero_percentage)
 {
-    /*Rempli la matrice M de taille l*c de nombres. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la matrice contient des 0*/
+    /*
+    Rempli la matrice M de taille l*c de nombres. Il y a zero_percentage % de chances que le nombre soit 0.
+    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
+    */
     long i,j;
     
     for (i=0;i<l;i++)
     {
         for (j=0;j<c;j++)
         {
-            if (random_between_0_and_1() > 0.5) //une chance sur deux de mettre un 0
+            if (random_between_0_and_1() < zero_percentage/100.0) //zero_percentage % de chances de mettre un 0
             {
                 *(M + i*c+j) = 0;
             }
@@ -33,14 +36,18 @@ void init_matrix(int *M, long l, long c)
     }
 }
 
-void init_row_matrix(int *M, long i, long n)
+void init_row_matrix(int *M, long i, long n, int zero_percentage)
 {
-    /*Rempli n éléments de la ligne i de la matrice M. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la ligne sont des 0*/
+    /*
+    Rempli n éléments de la ligne i de la matrice M.
+    Il y a zero_percentage % de chances que le nombre soit 0.
+    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
+    */
     long j;
 
     for (j=0;j<n;j++)
     {
-        if (random_between_0_and_1() > 0.5) //une chance sur deux de mettre un 0
+        if (random_between_0_and_1() < zero_percentage/100.0) //zero_percentage % de chances de mettre un 0
         {
             *(M + i*n+j) = 0;
         }
@@ -134,7 +141,7 @@ int main(int argc, char **argv)
     
     for (i=0;i<l;i++)
     {
-        init_row_matrix(A, i, c);
+        init_row_matrix(A, i, c, 75);
     }
     
     printf("\nMatrice creuse stockée \"normalement\":\n");

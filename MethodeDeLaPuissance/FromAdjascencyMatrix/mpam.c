@@ -24,14 +24,18 @@ float random_between_0_and_1()
     return (float) rand() / (float) RAND_MAX;
 }
 
-void init_row_matrix(int *M, long i, long n)
+void init_row_matrix(int *M, long i, long n, int zero_percentage)
 {
-    /*Rempli n éléments de la ligne i de la matrice M. Il y a une chance sur deux que le nombre soit 0. Statistiquement, la moitier de la ligne sont des 0*/
+    /*
+    Rempli n éléments de la ligne i de la matrice M.
+    Il y a zero_percentage % de chances que le nombre soit 0.
+    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
+    */
     long j;
 
     for (j=0;j<n;j++)
     {
-        if (random_between_0_and_1() > 0.5) //une chance sur deux de mettre un 0
+        if (random_between_0_and_1() < zero_percentage/100.0) //zero_percentage % de chances de mettre un 0
         {
             *(M + i*n+j) = 0;
         }
@@ -134,7 +138,7 @@ int main(int argc, char **argv)
     }
     long nb_ligne = n/p; //nombre de lignes par bloc
     long count = nb_ligne*n; //nombre d’éléments par bloc
-    printf("taille de la matrice dans le processus %i : %.3f G\n", my_rank, count * sizeof(int)/ 1073741824.);
+    printf("taille de la matrice stockée normalement dans le processus %i : %.3f G\n", my_rank, count * sizeof(int)/ 1073741824.);
     
     double somme_carres,somme_carres_total,sc,norm2Ax,inv_norm2Ax;; //variables utilisées dans le code
     double morceau_Ax[nb_ligne];
@@ -171,7 +175,7 @@ int main(int argc, char **argv)
     /* Initialisation de la matrice A dans le processus 0 */
     for (i = my_rank * nb_ligne; i < (my_rank + 1) * nb_ligne; i++)
     {
-        init_row_matrix(morceauA - (my_rank * nb_ligne * n), i, n);
+        init_row_matrix(morceauA - (my_rank * nb_ligne * n), i, n, 75); //on met 75% de 0 dans la matrice
     }
     
     if (debug)
@@ -220,7 +224,7 @@ int main(int argc, char **argv)
     Pour le moment, on passe par une matrice stockée normalement pour ensuite la "traduire" en matrice stockée comme une matrice creuse..
     Ca ne serre donc "à rien", mais c'est un début. 
     */
-    printf("taille de la matrice creuse dans le processus %i : %.3f G\n", my_rank, ((n+1) + 2 * len_values) * sizeof(int)/ 1073741824.);
+    printf("taille de la matrice creuse format CSR dans le processus %i : %.3f G\n", my_rank, ((n+1) + 2 * len_values) * sizeof(int)/ 1073741824.);
     
     start_time = my_gettimeofday();
     error = INFINITY;
