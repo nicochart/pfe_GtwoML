@@ -96,9 +96,13 @@ void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, long l, long 
     *(Row+l) = nb;
 }
 
-int get_sparce_matrix_value(long indl, long indc, int *Row, int *Column, int *Value, long len_values, long l, long c)
+int get_sparce_matrix_value_int(long indl, long indc, int *Row, int *Column, int *Value, long len_values, long l, long c, int bool_double)
 {
-    /*Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value. l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.*/
+    /*
+    Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
+    l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
+    Le vecteur Value doit être un vecteur d'entiers.
+    */
     if (indl >= l || indc >= c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
@@ -116,6 +120,63 @@ int get_sparce_matrix_value(long indl, long indc, int *Row, int *Column, int *Va
     return 0;
 }
 
+double get_sparce_matrix_value_double(long indl, long indc, int *Row, int *Column, double *Value, long len_values, long l, long c, int bool_double)
+{
+    /*
+    Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
+    l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
+    Le vecteur Value doit être un vecteur de doubles.
+    */
+    if (indl >= l || indc >= c)
+    {
+        perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
+        return -1;
+    }
+    long i;
+    long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
+    for (i=Row[indl];i<Row[indl]+nb_values;i++)
+    {
+        if (Column[i] == indc)
+        {
+            return Value[i];
+        }
+    }
+    return 0;
+}
+
+void fill_matrix_column_sum_vector(int *sum_vector, int *Column, int *Value, long len_values, long c)
+{
+    /*
+    Ecrit dans sum_vector (vecteur de taille c) la somme des éléments de chaque colonnes d'une matrice au format CSR (Row (ici non utilisé),Column,Value).
+    Chaque case d'indice i du sum_vector contiendra la somme des éléments de la colonne du même indice i.
+    len_values est la longueur du vecteur Value, et c le nombre de colonnes de la matrice.
+    */
+    int i;
+    for (i=0;i<c;i++) //initialisation du vecteur sum_vector
+    {
+        *(sum_vector+i) = 0;
+    }
+    
+    for (i=0;i<len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
+    {
+        *(sum_vector + Column[i]) += Value[i];
+    }
+}
+
+void normalize_matrix(int *sum_vector, int *Column, double *Value, long len_values, long c)
+{
+    /*
+    Normalise la matrice CSR (Row (ici non utilisé),Column,Value) en utilisant le vecteur sum_vector (contenant déjà la somme des éléments colonne par colonne)
+    len_values est la longueur du vecteur Value, et c le nombre de colonnes de la matrice.
+    Attention : le vecteur Value doit être un vecteur de doubles.
+    */
+    int i;
+    for (i=0;i<len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
+    {
+        Value[i] = Value[i] / sum_vector[Column[i]];
+    }
+}
+
 int main(int argc, char **argv)
 {
     long i,j; //pour les boucles
@@ -127,6 +188,10 @@ int main(int argc, char **argv)
     //variables de la matrice creuse
     int *Row,*Column;
     int *Value;
+    
+    //variables pour la normalisation de la matrice
+    int *VectSum_Column;
+    double *NormValue;
     
     if (argc < 3)
     {
@@ -179,14 +244,41 @@ int main(int argc, char **argv)
         printf("%i ",Value[i]);
     }
     printf("\n");
-    printf("\nMatrice creuse stockée de manière économique:\n");
+    printf("\nMatrice creuse stockée en format CSR:\n");
     for (i=0;i<l;i++)
     {
         for (j=0;j<c;j++)
         {
-            printf("%i ",get_sparce_matrix_value(i, j, Row, Column, Value, size - nb_zeros, l, c));
+            printf("%i ",get_sparce_matrix_value_int(i, j, Row, Column, Value, size - nb_zeros, l, c, 0));
         }
         printf("\n");
     }
+    
+    VectSum_Column = (int *)malloc(c * sizeof(int));
+    fill_matrix_column_sum_vector(VectSum_Column, Column, Value, size - nb_zeros, c);
+    printf("\nVecteur VectSum_Column (somme des éléments colonne par colonne:\n");
+    for(i=0;i<c;i++)
+    {
+        printf("%i ",VectSum_Column[i]);
+    }
     printf("\n");
+    
+    NormValue = (double *)malloc((size - nb_zeros) * sizeof(double));
+    //copie du vecteur Value dans NormValue
+    for(i=0;i<(size - nb_zeros);i++)
+    {
+        NormValue[i] = (double) Value[i];
+    }
+    //normalisation de la matrice (Row, Column, Value) dans (Row, Column, NormValue)
+    normalize_matrix(VectSum_Column, Column, NormValue, size - nb_zeros, c);
+    
+    printf("\nMatrice normalisée (stockée en format CSR):\n");
+    for (i=0;i<l;i++)
+    {
+        for (j=0;j<c;j++)
+        {
+            printf("%.2f ",get_sparce_matrix_value_double(i, j, Row, Column, NormValue, size - nb_zeros, l, c, 1));
+        }
+        printf("\n");
+    }
 }
