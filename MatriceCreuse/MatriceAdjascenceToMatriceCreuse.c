@@ -96,7 +96,7 @@ void fill_sparce_matrix(int *M, int *Row, int *Column, int *Value, long l, long 
     *(Row+l) = nb;
 }
 
-int get_sparce_matrix_value_int(long indl, long indc, int *Row, int *Column, int *Value, long len_values, long l, long c, int bool_double)
+int get_sparce_matrix_value_int(long indl, long indc, int *Row, int *Column, int *Value, long len_values, long l, long c)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
@@ -120,7 +120,7 @@ int get_sparce_matrix_value_int(long indl, long indc, int *Row, int *Column, int
     return 0;
 }
 
-double get_sparce_matrix_value_double(long indl, long indc, int *Row, int *Column, double *Value, long len_values, long l, long c, int bool_double)
+double get_sparce_matrix_value_double(long indl, long indc, int *Row, int *Column, double *Value, long len_values, long l, long c)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice creuse stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
     {
         for (j=0;j<c;j++)
         {
-            printf("%i ",get_sparce_matrix_value_int(i, j, Row, Column, Value, size - nb_zeros, l, c, 0));
+            printf("%i ",get_sparce_matrix_value_int(i, j, Row, Column, Value, size - nb_zeros, l, c));
         }
         printf("\n");
     }
@@ -269,6 +269,7 @@ int main(int argc, char **argv)
     {
         NormValue[i] = (double) Value[i];
     }
+    
     //normalisation de la matrice (Row, Column, Value) dans (Row, Column, NormValue)
     normalize_matrix(VectSum_Column, Column, NormValue, size - nb_zeros, c);
     
@@ -277,7 +278,7 @@ int main(int argc, char **argv)
     {
         for (j=0;j<c;j++)
         {
-            printf("%.2f ",get_sparce_matrix_value_double(i, j, Row, Column, NormValue, size - nb_zeros, l, c, 1));
+            printf("%.2f ",get_sparce_matrix_value_double(i, j, Row, Column, NormValue, size - nb_zeros, l, c));
         }
         printf("\n");
     }
