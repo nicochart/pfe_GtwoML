@@ -140,7 +140,7 @@ int main(int argc, char **argv)
     long count = nb_ligne*n; //nombre d’éléments par bloc
     printf("taille de la matrice stockée normalement dans le processus %i : %.3f G\n", my_rank, count * sizeof(int)/ 1073741824.);
     
-    double somme_carres,somme_carres_total,sc,norm2Ax,inv_norm2Ax;; //variables utilisées dans le code
+    double somme_carres,somme_carres_total,sc,inv_norm2Ax;; //variables utilisées dans le code
     double morceau_Ax[nb_ligne];
 
     /*** allocation de la matrice et des vecteurs ***/
@@ -236,39 +236,26 @@ int main(int argc, char **argv)
         {	
             if (debug) {printf("---------------------\n");}
             printf("iteration %4d, erreur actuelle %g\n", n_iterations, error);
-            somme_carres = 0;
-            for(i=0; i<nb_ligne; i++)
-            {
-                sc = 0; //scalaire
-                for (j=Row[i]; j<Row[i+1]; j++)
-                {
-                    sc += Value[j] * X[Column[j]];
-                }
-                morceau_Ax[i] = sc;
-                somme_carres  += sc * sc;
-            }
         }
-        else
+        
+        // calcul du produit matrice-vecteur y=Ax et de la somme des carrés total
+        somme_carres = 0;
+        for(i=0; i<nb_ligne; i++)
         {
-            somme_carres = 0;
-            for(i=0; i<nb_ligne; i++)
+            sc = 0; //scalaire
+            for (j=Row[i]; j<Row[i+1]; j++)
             {
-                sc = 0; //scalaire
-                for (j=Row[i]; j<Row[i+1]; j++)
-                {
-                    sc += Value[j] * X[Column[j]];
-                }
-                morceau_Ax[i] = sc;
-                somme_carres  += sc * sc;
+                sc += Value[j] * X[Column[j]];
             }
+            morceau_Ax[i] = sc;
+            somme_carres  += sc * sc;
         }
         
         MPI_Allreduce(&somme_carres, &somme_carres_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les somme_carres dans somme_carres_total
         MPI_Allgather(morceau_Ax, nb_ligne, MPI_DOUBLE, Y, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD);
 
-        norm2Ax = sqrt(somme_carres_total);
-        inv_norm2Ax = 1.0 / norm2Ax;
-            
+        //normalisation de Y
+        inv_norm2Ax = 1.0 / sqrt(somme_carres_total);
             
         for (i = 0; i < n; i++)
         {
@@ -308,7 +295,7 @@ int main(int argc, char **argv)
     if (my_rank == 0)
     {
         total_time = my_gettimeofday() - start_time;
-        printf("---------------------\nerreur finale après %4d iterations: %g (|VP| = %g)\n", n_iterations, error, norm2Ax);
+        printf("---------------------\nerreur finale après %4d iterations: %g (|VP| = %g)\n", n_iterations, error, sqrt(somme_carres_total));
         printf("time : %.1f s      MFlops : %.1f \n", total_time, (2.0 * n * n + 7.0 * n) * n_iterations / 1048576. / total_time);
 
         // stocke le vecteur propre dans un fichier
