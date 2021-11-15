@@ -184,10 +184,7 @@ int main(int argc, char **argv)
     }
 
     free(X);
-    if (my_rank == 0)
-    {
-        free(Y);
-    }
+    free(Y);
     free(morceauA);
 
     MPI_Finalize();
