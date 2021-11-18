@@ -8,34 +8,34 @@
 
 struct IntCOOMatrix
 {
-     int * Row;
-     int * Column;
-     int * Value;
-     long dim_l;
-     long dim_c;
-     long len_values; //taille des vecteurs = nombre de valeurs non nulles de la matrice
+     int * Row; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     long dim_l; //nombre de lignes
+     long dim_c; //nombre de colonnes
+     long len_values; //taille des vecteurs Row, Column et Value
 };
 typedef struct IntCOOMatrix IntCOOMatrix;
 
 struct IntCSRMatrix
 {
-     int * Row;
-     int * Column;
-     int * Value;
-     long len_row; //nombre de lignes
+     int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
+     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     long dim_l; //nombre de lignes
      long dim_c; //nombre de colonnes
-     long len_values;
+     long len_values;  //taille des vecteurs Column et Value
 };
 typedef struct IntCSRMatrix IntCSRMatrix;
 
 struct DoubleCSRMatrix
 {
-     int * Row;
-     int * Column;
-     double * Value;
-     long len_row; //nombre de lignes
+     int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
+     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     double * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     long dim_l; //nombre de lignes
      long dim_c; //nombre de colonnes
-     long len_values;
+     long len_values; //taille des vecteurs Column et Value
 };
 typedef struct DoubleCSRMatrix DoubleCSRMatrix;
 
@@ -84,7 +84,7 @@ long cpt_nb_zeros_matrix(int *M, long long size)
 void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
 {
     /*
-    Traduit la matrice stockée normalement dans M (de taille l*c) en matrice stockée en format COO dans M_COO.
+    Traduit la matrice stockée normalement dans M en matrice stockée en format COO dans M_COO.
     Les vecteurs Row, Column et Value sont de taille "nombre d'éléments non nulles dans la matrice".
     Les dimensions de la matrice (dim_l,dim_c) = (nombre de lignes, nombre de colonnes) doivent déjà être définis dans M_COO. Les allocations mémoires doivent aussi être fait au préalable.
     */
@@ -106,14 +106,11 @@ void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
 void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 {
     /*
-    Traduit la matrice M_COO stockée au format COO en matrice stockée en format CSR
-    A la fin COO_Column=CSR_Column, COO_Value=CSR_Value donc on le nes passe pas en paramètre.
-    Le vecteur COO_Row est de longueur len_coo_row, et le vecteur CSR_Row est de longueur "nombre de ligne de la matrice + 1" (l+1).
+    Traduit la matrice M_COO stockée au format COO en matrice stockée en format CSR dans M_CSR
+    A la fin COO_Column=CSR_Column, COO_Value=CSR_Value, et CSR_Row est la traduction en CSR de COO_Row
     */
-    //int *COO_Row, int *CSR_Row, long len_coo_row
-    long len_coo_row = (*M_COO).len_values;
     long i;
-    for (i=0;i<len_coo_row;i++)
+    for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
     {
         (*M_CSR).Column[i] = (*M_COO).Column[i];
         (*M_CSR).Value[i] = (*M_COO).Value[i];
@@ -127,7 +124,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
         *(CSR_Row + current_indl) = 0;
         current_indl++;
     }
-    for (i=0;i<len_coo_row;i++)
+    for (i=0;i<(*M_COO).len_values;i++)
     {
         if (COO_Row[i] != current_indl)
         {
@@ -140,7 +137,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
             current_indl = COO_Row[i];
         }
     }
-    *(CSR_Row + current_indl + 1) = len_coo_row;
+    *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
 }
 
 int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
@@ -152,7 +149,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
     */
     int *Row,*Column,*Value;
     Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
-    if (indl >= (*M_CSR).len_row || indc >= (*M_CSR).dim_c)
+    if (indl >= (*M_CSR).dim_l || indc >= (*M_CSR).dim_c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
@@ -178,7 +175,7 @@ double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR
     */
     int *Row,*Column; double *Value;
     Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
-    if (indl >= (*M_CSR).len_row || indc >= (*M_CSR).dim_c)
+    if (indl >= (*M_CSR).dim_l || indc >= (*M_CSR).dim_c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
@@ -335,7 +332,7 @@ void csr_to_dense_matrix(double *M, DoubleCSRMatrix * M_CSR)
 {
     /*Fonction temporaire pour faire un pagerank avec une matrice stockée normalement*/
     int i,j;
-    for (i=0;i<(*M_CSR).len_row;i++)
+    for (i=0;i<(*M_CSR).dim_l;i++)
     {
         for (j=0;j<(*M_CSR).dim_c;j++)
         {
@@ -387,7 +384,7 @@ int main(int argc, char **argv)
     nb_non_zeros = size - nb_zeros;
 
     A_COO.len_values = A_CSR.len_values = norm_A_CSR.len_values = nb_non_zeros;
-    A_CSR.len_row = norm_A_CSR.len_row = n;
+    A_CSR.dim_l = norm_A_CSR.dim_l = n;
     A_COO.dim_l = A_COO.dim_c = A_CSR.dim_c = norm_A_CSR.dim_c = n;
     A_COO.Row = (int *)malloc(nb_non_zeros * sizeof(int));
     A_CSR.Row = norm_A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
