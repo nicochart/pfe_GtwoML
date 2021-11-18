@@ -6,6 +6,39 @@
 #include <time.h>
 #include <math.h>
 
+struct IntCOOMatrix
+{
+     int * Row;
+     int * Column;
+     int * Value;
+     long dim_l;
+     long dim_c;
+     long len_values; //taille des vecteurs = nombre de valeurs non nulles de la matrice
+};
+typedef struct IntCOOMatrix IntCOOMatrix;
+
+struct IntCSRMatrix
+{
+     int * Row;
+     int * Column;
+     int * Value;
+     long len_row; //nombre de lignes
+     long dim_c; //nombre de colonnes
+     long len_values;
+};
+typedef struct IntCSRMatrix IntCSRMatrix;
+
+struct DoubleCSRMatrix
+{
+     int * Row;
+     int * Column;
+     double * Value;
+     long len_row; //nombre de lignes
+     long dim_c; //nombre de colonnes
+     long len_values;
+};
+typedef struct DoubleCSRMatrix DoubleCSRMatrix;
+
 float random_between_0_and_1()
 {
     /*Renvoie un nombre aléatoire entre 0 et 1. Permet de faire une décision aléatoire*/
@@ -48,35 +81,47 @@ long cpt_nb_zeros_matrix(int *M, long long size)
     return compteur;
 }
 
-void dense_to_coo_matrix(int *M, int *Row, int *Column, int *Value, long l, long c)
+void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
 {
     /*
-    Traduit la matrice stockée normalement dans M (de taille l*c) en matrice stockée en format COO (Row, Column, Value)
+    Traduit la matrice stockée normalement dans M (de taille l*c) en matrice stockée en format COO dans M_COO.
     Les vecteurs Row, Column et Value sont de taille "nombre d'éléments non nulles dans la matrice".
+    Les dimensions de la matrice (dim_l,dim_c) = (nombre de lignes, nombre de colonnes) doivent déjà être définis dans M_COO. Les allocations mémoires doivent aussi être fait au préalable.
     */
     long i, j, nb = 0;
-    for (i=0;i<l;i++)
+    for (i=0;i<(*M_COO).dim_l;i++)
     {
-        for (j=0;j<c;j++)
+        for (j=0;j<(*M_COO).dim_c;j++)
         {
-            if (*(M + i*c+j) != 0)
+            if (*(M + i*(*M_COO).dim_c+j) != 0)
             {
-                *(Row + nb) = i; *(Column + nb) = j;
-                *(Value + nb) = *(M+i*c+j);
+                (*M_COO).Row[nb] = i; (*M_COO).Column[nb] = j;
+                (*M_COO).Value[nb] = *(M+i*(*M_COO).dim_c+j);
                 nb++;
             }
         }
     }
 }
 
-void coo_to_csr_matrix(int *COO_Row, int *CSR_Row, long len_coo_row)
+void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 {
     /*
-    Traduit la matrice stockée au format COO dans (COO_Row, COO_Column, COO_Value) en matrice stockée en format csr (CSR_Row, CSR_Column, CSR_Value)
-    COO_Column=CSR_Column, COO_Value=CSR_Value donc on le nes passe pas en paramètre.
+    Traduit la matrice M_COO stockée au format COO en matrice stockée en format CSR
+    A la fin COO_Column=CSR_Column, COO_Value=CSR_Value donc on le nes passe pas en paramètre.
     Le vecteur COO_Row est de longueur len_coo_row, et le vecteur CSR_Row est de longueur "nombre de ligne de la matrice + 1" (l+1).
     */
-    long i,current_indl = 0;
+    //int *COO_Row, int *CSR_Row, long len_coo_row
+    long len_coo_row = (*M_COO).len_values;
+    long i;
+    for (i=0;i<len_coo_row;i++)
+    {
+        (*M_CSR).Column[i] = (*M_COO).Column[i];
+        (*M_CSR).Value[i] = (*M_COO).Value[i];
+    }
+
+    int * COO_Row = (*M_COO).Row;
+    int * CSR_Row = (*M_CSR).Row;
+    long current_indl = 0;
     while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
     {
         *(CSR_Row + current_indl) = 0;
@@ -98,14 +143,16 @@ void coo_to_csr_matrix(int *COO_Row, int *CSR_Row, long len_coo_row)
     *(CSR_Row + current_indl + 1) = len_coo_row;
 }
 
-int get_csr_matrix_value_int(long indl, long indc, int *Row, int *Column, int *Value, long l, long c)
+int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice CSR stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
     l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
     Le vecteur Value doit être un vecteur d'entiers.
     */
-    if (indl >= l || indc >= c)
+    int *Row,*Column,*Value;
+    Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
+    if (indl >= (*M_CSR).len_row || indc >= (*M_CSR).dim_c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
@@ -122,14 +169,16 @@ int get_csr_matrix_value_int(long indl, long indc, int *Row, int *Column, int *V
     return 0;
 }
 
-double get_csr_matrix_value_double(long indl, long indc, int *Row, int *Column, double *Value, long l, long c)
+double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice CSR stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
     l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
     Le vecteur Value doit être un vecteur de doubles.
     */
-    if (indl >= l || indc >= c)
+    int *Row,*Column; double *Value;
+    Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
+    if (indl >= (*M_CSR).len_row || indc >= (*M_CSR).dim_c)
     {
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
@@ -146,7 +195,7 @@ double get_csr_matrix_value_double(long indl, long indc, int *Row, int *Column, 
     return 0;
 }
 
-void fill_matrix_column_sum_vector(int *sum_vector, int *Column, int *Value, long len_values, long c)
+void fill_matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
 {
     /*
     Ecrit dans sum_vector (vecteur de taille c) la somme des éléments de chaque colonnes d'une matrice au format CSR (Row (ici non utilisé),Column,Value).
@@ -154,29 +203,31 @@ void fill_matrix_column_sum_vector(int *sum_vector, int *Column, int *Value, lon
     len_values est la longueur du vecteur Value, et c le nombre de colonnes de la matrice.
     */
     int i;
-    for (i=0;i<c;i++) //initialisation du vecteur sum_vector
+    for (i=0;i<(*M_CSR).dim_c;i++) //initialisation du vecteur sum_vector
     {
         *(sum_vector+i) = 0;
     }
 
-    for (i=0;i<len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
+    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
     {
-        *(sum_vector + Column[i]) += Value[i];
+        *(sum_vector + (*M_CSR).Column[i]) += (*M_CSR).Value[i];
     }
 }
 
-void normalize_matrix(int *sum_vector, int *Column, double *Value, long len_values, long c)
+void normalize_matrix(DoubleCSRMatrix * M_CSR)
 {
     /*
-    Normalise la matrice CSR (Row (ici non utilisé),Column,Value) en utilisant le vecteur sum_vector (contenant déjà la somme des éléments colonne par colonne)
-    len_values est la longueur du vecteur Value, et c le nombre de colonnes de la matrice.
-    Attention : le vecteur Value doit être un vecteur de doubles.
+    Normalise la matrice CSR M_CSR en utilisant le vecteur sum_vector (contenant déjà la somme des éléments colonne par colonne)
     */
     long i;
-    for (i=0;i<len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
+    int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
+    fill_matrix_column_sum_vector(sum_vector, M_CSR);
+
+    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
     {
-        Value[i] = Value[i] / sum_vector[Column[i]];
+        (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
     }
+    free(sum_vector);
 }
 
 /*Fonctions pour PageRank*/
@@ -280,15 +331,15 @@ int methodeDeLaPuissance(double *P, double *q_init, double *q_end, int n, double
     return cpt;
 }
 
-void csr_to_dense_matrix(double *M, int *Row, int *Column, int *Value, long l, long c)
+void csr_to_dense_matrix(double *M, DoubleCSRMatrix * M_CSR)
 {
     /*Fonction temporaire pour faire un pagerank avec une matrice stockée normalement*/
     int i,j;
-    for (i=0;i<l;i++)
+    for (i=0;i<(*M_CSR).len_row;i++)
     {
-        for (j=0;j<c;j++)
+        for (j=0;j<(*M_CSR).dim_c;j++)
         {
-            *(M+i*c+j) = (double) get_csr_matrix_value_int(i, j, Row, Column, Value, l, c);
+            *(M+i*(*M_CSR).dim_c+j) = get_csr_matrix_value_double(i, j, M_CSR);
         }
     }
 }
@@ -302,16 +353,12 @@ int main(int argc, char **argv)
     int nb_zeros,nb_non_zeros;
     int *A;
 
-    //variables de la matrice creuse COO et CSR
-    //COO et CSR
-    int *Value,*Column;
-    //COO
-    int *COO_Row;
-    //CSR
-    int *Row;
+    //matrices au format COO et CSR
+    struct IntCOOMatrix A_COO;
+    struct IntCSRMatrix A_CSR;
+    struct DoubleCSRMatrix norm_A_CSR;
 
     //variables pour la normalisation de la matrice
-    int *VectSum_Column;
     double *NormValue;
 
     if (argc < 2)
@@ -339,48 +386,41 @@ int main(int argc, char **argv)
     nb_zeros = cpt_nb_zeros_matrix(A, size);
     nb_non_zeros = size - nb_zeros;
 
-    COO_Row = (int *)malloc(nb_non_zeros * sizeof(int));
-    Row = (int *)malloc((n+1) * sizeof(int));
-    Column = (int *)malloc(nb_non_zeros * sizeof(int));
-    Value = (int *)malloc(nb_non_zeros * sizeof(int));
+    A_COO.len_values = A_CSR.len_values = norm_A_CSR.len_values = nb_non_zeros;
+    A_CSR.len_row = norm_A_CSR.len_row = n;
+    A_COO.dim_l = A_COO.dim_c = A_CSR.dim_c = norm_A_CSR.dim_c = n;
+    A_COO.Row = (int *)malloc(nb_non_zeros * sizeof(int));
+    A_CSR.Row = norm_A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
+    A_COO.Column = A_CSR.Column = norm_A_CSR.Column = (int *)malloc(nb_non_zeros * sizeof(int));
+    A_COO.Value = A_CSR.Value = (int *)malloc(nb_non_zeros * sizeof(int));
+    norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
 
-    dense_to_coo_matrix(A, COO_Row, Column, Value, n, n);
-    coo_to_csr_matrix(COO_Row, Row, nb_non_zeros);
+    dense_to_coo_matrix(A, &A_COO);
+    coo_to_csr_matrix(&A_COO, &A_CSR);
 
-    VectSum_Column = (int *)malloc(n * sizeof(int));
-    fill_matrix_column_sum_vector(VectSum_Column, Column, Value, nb_non_zeros, n);
-
-    NormValue = (double *)malloc(nb_non_zeros * sizeof(double));
     //copie du vecteur Value dans NormValue
-    for(i=0;i<nb_non_zeros;i++) {NormValue[i] = (double) Value[i];}
+    for(i=0;i<nb_non_zeros;i++) {norm_A_CSR.Value[i] = (double) A_CSR.Value[i];} //norm_A_CSR.Value = A_CSR.Value
 
     //normalisation de la matrice (Row, Column, Value) dans (Row, Column, NormValue)
-    normalize_matrix(VectSum_Column, Column, NormValue, nb_non_zeros, n);
+    normalize_matrix(&norm_A_CSR);
 
     if (debug)
     {
         printf("Nombre de zeros : %i\n",nb_zeros);
         printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
 
-        printf("\nVecteur COO_Row :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%i ",COO_Row[i]);}
         printf("\nVecteur Row :\n");
-        for(i=0;i<n+1;i++) {printf("%i ",Row[i]);}
+        for(i=0;i<n+1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
         printf("\nVecteur Column :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%i ",Column[i]);}
+        for(i=0;i<nb_non_zeros;i++) {printf("%i ",norm_A_CSR.Column[i]);}
         printf("\nVecteur Value :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%i ",Value[i]);} printf("\n");
+        for(i=0;i<nb_non_zeros;i++) {printf("%f ",norm_A_CSR.Value[i]);} printf("\n");
+
         printf("\nMatrice creuse stockée en format CSR:\n");
-        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",get_csr_matrix_value_int(i, j, Row, Column, Value, n, n));} printf("\n");}
-
-        printf("\nVecteur VectSum_Column (somme des éléments colonne par colonne):\n");
-        for(i=0;i<n;i++){printf("%i ",VectSum_Column[i]);}printf("\n");
-
-        printf("\nVecteur NormValue:\n");
-        for (i=0;i<nb_non_zeros;i++){printf("%.2f ",NormValue[i]);} printf("\n");
+        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",get_csr_matrix_value_int(i, j, &A_CSR));} printf("\n");}
 
         printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
-        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, Row, Column, NormValue, n, n));} printf("\n");}
+        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &norm_A_CSR));} printf("\n");}
         printf("\n");
     }
 
@@ -395,9 +435,12 @@ int main(int argc, char **argv)
     for (i=0;i<n;i++) {q[i] = (double) 1/n;}
 
     P = (double *)malloc(size * sizeof(double));
-    csr_to_dense_matrix(P, Row, Column, Value, n, n);
+    csr_to_dense_matrix(P, &norm_A_CSR);
+
+    if (debug) {printf("Matrice P (stockée \"dense\") :\n"); for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",P[i*n+j]);} printf("\n");}}
 
     nb_iterations_faites = methodeDeLaPuissance(P, q, q, n, beta, epsilon, maxIter);
+    printf("\nrésultat ");
     for(i=0;i<n;i++) {printf("%f ",q[i]);}
     printf("obtenu en %i itérations\n",nb_iterations_faites);
 }
