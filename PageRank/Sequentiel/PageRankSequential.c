@@ -243,6 +243,22 @@ void matrix_vector_product(double *y, double *A, double *x, int n)
     }
 }
 
+void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
+{
+    long i,j;
+    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice stockée au format CSR, x et y doivent être de talle (*A).dim_c*/
+    long nb_ligne = (*A).dim_l;
+    long nb_col = (*A).dim_c;
+    for (i=0;i<nb_ligne;i++)
+    {
+        y[i] = 0;
+        for (j=(*A).Row[i]; j<(*A).Row[i+1]; j++) //for (j=0;j<nb_col;j++)  y[i] += A[i*nb_col+j] * x[j]
+        {
+            y[i] += (*A).Value[j] * x[(*A).Column[j]];
+        }
+    }
+}
+
 int one_in_vector(double *vect, int size)
 {
     //retourne 1 s'il y a un "1" dans le vecteur (permet de tester un cas particulier du PageRank lorsque beta = 1)
@@ -281,7 +297,7 @@ void copy_vector_value(double *vect1, double *vect2, int size)
     for (int i=0;i<size;i++) {vect2[i] = vect1[i];}
 }
 
-void iterationMP(double *P, double *new_q, double *old_q, int n, double beta)
+void iterationMP(DoubleCSRMatrix *P, double *new_q, double *old_q, int n, double beta)
 {
     /*
     Fait une itération de la méthode de la puissance
@@ -290,7 +306,7 @@ void iterationMP(double *P, double *new_q, double *old_q, int n, double beta)
     int i;
     double norme_old_q,norme_new_q,to_add;
     //étape 1 : new_q = beta * P.old_q
-    matrix_vector_product(new_q,P,old_q,n);
+    csr_matrix_vector_product(new_q,P,old_q);
     for (i=0;i<n;i++) {new_q[i] *= beta;}
     //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
     norme_old_q = vector_norm(old_q,n);
@@ -301,12 +317,12 @@ void iterationMP(double *P, double *new_q, double *old_q, int n, double beta)
     for (i=0;i<n;i++) {new_q[i] *= 1/norme_new_q;}
 }
 
-int methodeDeLaPuissance(double *P, double *q_init, double *q_end, int n, double beta, double epsilon, int maxIter)
+int methodeDeLaPuissance(DoubleCSRMatrix *P, double *q_init, double *q_end, double beta, double epsilon, int maxIter)
 {
     /*
     Applique la méthode de la puissance au vecteur initial q_init passé en paramètre, avec la matrice de passage P passée en paramètre
     */
-    int i,cpt = 0;
+    long n=(*P).dim_c,i,cpt = 0;
     double *new_q = (double *)malloc(n * sizeof(double));
     double *old_q = (double *)malloc(n * sizeof(double));
     double *tmp;
@@ -423,7 +439,7 @@ int main(int argc, char **argv)
 
     /*Page Rank*/
     double beta;
-    double *q,*P;
+    double *q;
     int maxIter = 100000,nb_iterations_faites;
     double epsilon = 0.00000000001;
 
@@ -431,12 +447,7 @@ int main(int argc, char **argv)
     q = (double *)malloc(n * sizeof(double));
     for (i=0;i<n;i++) {q[i] = (double) 1/n;}
 
-    P = (double *)malloc(size * sizeof(double));
-    csr_to_dense_matrix(P, &norm_A_CSR);
-
-    if (debug) {printf("Matrice P (stockée \"dense\") :\n"); for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",P[i*n+j]);} printf("\n");}}
-
-    nb_iterations_faites = methodeDeLaPuissance(P, q, q, n, beta, epsilon, maxIter);
+    nb_iterations_faites = methodeDeLaPuissance(&norm_A_CSR, q, q, beta, epsilon, maxIter);
     printf("\nrésultat ");
     for(i=0;i<n;i++) {printf("%f ",q[i]);}
     printf("obtenu en %i itérations\n",nb_iterations_faites);
