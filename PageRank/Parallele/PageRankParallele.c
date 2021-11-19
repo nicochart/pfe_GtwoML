@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
-//#include <mpi.h>
+#include <mpi.h>
 
 struct IntCOOMatrix
 {
@@ -401,99 +401,143 @@ void csr_to_dense_matrix(double *M, DoubleCSRMatrix * M_CSR)
 
 int main(int argc, char **argv)
 {
-    /*int my_rank, p, valeur, tag = 0;
+    int my_rank, p, valeur, tag = 0;
     MPI_Status status;
 
     //Initialisation MPI
     MPI_Init(&argc,&argv);
     MPI_Comm_size(MPI_COMM_WORLD, &p);
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); */
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int debug=1; //passer à 1 pour avoir plus de print
     long i,j; //pour les boucles
     long n;
     long long size;
-    int nb_zeros,nb_non_zeros;
-    int *A;
+    int nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
+    if (debug && my_rank == 0)
+    {
+        list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));
+    }
+
+    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
+    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
 
     if (argc < 2)
     {
-        printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n", argv[0]);
+        printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n Vous pouvez aussi indiquer des pourcentages de 0 pour chaque bloc après le n.\n", argv[0]);
         exit(1);
     }
     n = atoll(argv[1]);
+    if (argc > 2)
+    {
+        for (i=2;i<argc && i<p+2;i++)
+        {
+            *(zeros_percentages+i-2) = 100 - atoll(argv[i]);
+        }
+    }
+
+    if (debug && my_rank == 0)
+    {
+        printf("Liste des pourcentages de 0 dans chaque bloc :\n");
+        for (i=0;i<p;i++) {printf("%i ",zeros_percentages[i]);}
+        printf("\n");
+    }
+
     size = n * n;
+    long nb_ligne = n/p; //nombre de lignes par bloc
 
     //matrice format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix()
     struct IntCOOMatrix A_COO;
-    generate_coo_matrix(&A_COO, 0, 75, n, n);
+    generate_coo_matrix(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
 
-    nb_non_zeros = A_COO.len_values;
+    nb_non_zeros_local = A_COO.len_values;
+    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    if (debug) {MPI_Gather(&nb_non_zeros_local, 1, MPI_INT, list_nb_non_zeros_local, 1,  MPI_INT, 0, MPI_COMM_WORLD);}
+
+    if (debug && my_rank == 0)
+    {
+        printf("nb_non_zeros total = %i\n",nb_non_zeros);
+        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
+    }
+
+    if (debug && my_rank == 0)
+    {
+        printf("Liste des nombres de 1 locaux :\n");
+        for(i=0;i<p;i++)
+        {
+            printf("%i ",list_nb_non_zeros_local[i]);
+        }
+        printf("\n");
+    }
 
     //matrice format CSR :
     //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
-    struct IntCSRMatrix A_CSR;
-    A_CSR.dim_l = A_CSR.dim_c = n;
-    A_CSR.len_values = nb_non_zeros;
-    A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
-    A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
-    coo_to_csr_matrix(&A_COO, &A_CSR);
+    //struct IntCSRMatrix A_CSR;
+    //A_CSR.dim_l = A_CSR.dim_c = n;
+    //A_CSR.len_values = nb_non_zeros;
+    //A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
+    //A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
+    //coo_to_csr_matrix(&A_COO, &A_CSR);
 
     //matrice normalisée format CSR :
     //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
-    struct DoubleCSRMatrix norm_A_CSR;
-    norm_A_CSR.len_values = nb_non_zeros;
-    norm_A_CSR.dim_l = norm_A_CSR.dim_c = n;
-    norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
-    norm_A_CSR.Column = A_CSR.Column; norm_A_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
+    //struct DoubleCSRMatrix norm_A_CSR;
+    //norm_A_CSR.len_values = nb_non_zeros;
+    //norm_A_CSR.dim_l = norm_A_CSR.dim_c = n;
+    //norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
+    //norm_A_CSR.Column = A_CSR.Column; norm_A_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
     //copie du vecteur Value dans NormValue
-    for(i=0;i<nb_non_zeros;i++) {norm_A_CSR.Value[i] = (double) A_CSR.Value[i];} //norm_A_CSR.Value = A_CSR.Value
+    //for(i=0;i<nb_non_zeros;i++) {norm_A_CSR.Value[i] = (double) A_CSR.Value[i];} //norm_A_CSR.Value = A_CSR.Value
     //normalisation de la matrice
-    normalize_matrix(&norm_A_CSR);
+    //normalize_matrix(&norm_A_CSR);
 
-    if (debug)
+    //if (debug)
+    //{
+    //    printf("\nMatrice stockée en format CSR :\n");
+    //    for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",get_csr_matrix_value_int(i, j, &A_CSR));} printf("\n");}
+    //    printf("\n");
+
+    //    printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
+    //    printf("Nombre de zeros : %i\n",size - nb_non_zeros);
+    //    printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
+
+    //    printf("\nVecteur Row de norm_A_CSR :\n");
+    //    for(i=0;i<A_COO.dim_l + 1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
+    //    printf("\nVecteur Column de norm_A_CSR :\n");
+    //    for(i=0;i<A_COO.len_values;i++) {printf("%i ",norm_A_CSR.Column[i]);}
+    //    printf("\nVecteur Value de de norm_A_CSR (en sortie de normalize) :\n");
+    //    for(i=0;i<nb_non_zeros;i++) {printf("%.2f ",norm_A_CSR.Value[i]);}
+    //    printf("\n");
+
+    //    printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
+    //    for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &norm_A_CSR));} printf("\n");}
+    //}
+
+    //Page Rank
+    //double beta;
+    //double *q;
+    //int maxIter = 100000,nb_iterations_faites;
+    //double epsilon = 0.00000000001;
+
+    //beta = 1;
+    //q = (double *)malloc(n * sizeof(double));
+    //for (i=0;i<n;i++) {q[i] = (double) 1/n;}
+
+    //nb_iterations_faites = methodeDeLaPuissance(&norm_A_CSR, q, q, beta, epsilon, maxIter);
+    //printf("\nrésultat ");
+    //for(i=0;i<n;i++) {printf("%f ",q[i]);}
+    //printf("obtenu en %i itérations\n",nb_iterations_faites);
+
+    //free(q);
+    //free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
+    //free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
+    //free(norm_A_CSR.Value); //Row et Column communs avec la matrice CSR
+
+    if (debug && my_rank == 0)
     {
-        printf("\nMatrice stockée en format CSR :\n");
-        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",get_csr_matrix_value_int(i, j, &A_CSR));} printf("\n");}
-        printf("\n");
-
-        printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
-        printf("Nombre de zeros : %i\n",size - nb_non_zeros);
-        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
-
-        printf("\nVecteur Row de norm_A_CSR :\n");
-        for(i=0;i<A_COO.dim_l + 1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
-        printf("\nVecteur Column de norm_A_CSR :\n");
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",norm_A_CSR.Column[i]);}
-        printf("\nVecteur Value de de norm_A_CSR (en sortie de normalize) :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%.2f ",norm_A_CSR.Value[i]);}
-        printf("\n");
-
-        printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
-        for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &norm_A_CSR));} printf("\n");}
+        free(list_nb_non_zeros_local);
     }
-
-    /*Page Rank*/
-    double beta;
-    double *q;
-    int maxIter = 100000,nb_iterations_faites;
-    double epsilon = 0.00000000001;
-
-    beta = 1;
-    q = (double *)malloc(n * sizeof(double));
-    for (i=0;i<n;i++) {q[i] = (double) 1/n;}
-
-    nb_iterations_faites = methodeDeLaPuissance(&norm_A_CSR, q, q, beta, epsilon, maxIter);
-    printf("\nrésultat ");
-    for(i=0;i<n;i++) {printf("%f ",q[i]);}
-    printf("obtenu en %i itérations\n",nb_iterations_faites);
-
-    free(q);
-    free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
-    free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
-    free(norm_A_CSR.Value); //Row et Column communs avec la matrice CSR
-
-    //MPI_Finalize();
+    MPI_Finalize();
     return 0;
 }
