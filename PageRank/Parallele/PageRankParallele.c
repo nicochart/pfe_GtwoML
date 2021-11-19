@@ -1,10 +1,11 @@
-/*Travail sur PageRank non pondéré sequentiel*/
+/*Travail sur PageRank non pondéré parallele*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+//#include <mpi.h>
 
 struct IntCOOMatrix
 {
@@ -67,6 +68,44 @@ void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
     }
 }
 
+void generate_coo_matrix(IntCOOMatrix *M_COO, long ind_start_row, int zero_percentage, long l, long c)
+{
+    /*
+    Génère la matrice creuse (*M_COO).
+    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence le morceau
+    Statistiquement, dans la matrice dense correspondante, il y a zero_percentage % de 0.
+    Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
+    Ce n'est pas exact, car un test est effectué en plus pour éviter les 1 dans la diagonale.
+    */
+    long i,j,cpt_values,size=l*c;
+    long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
+    (*M_COO).dim_l = l;
+    (*M_COO).dim_c = c;
+    (*M_COO).Row = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+    (*M_COO).Column = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+    (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+
+    cpt_values=0;
+    for (i=0;i<l;i++) //parcours des lignes
+    {
+        for (j=0;j<c;j++) //parcours des lignes
+        {
+            if ( (ind_start_row+i)!=j && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
+            {
+                if (cpt_values < mean_nb_non_zeros)
+                {
+                    (*M_COO).Row[cpt_values] = i;
+                    (*M_COO).Column[cpt_values] = j;
+                    (*M_COO).Value[cpt_values] = 1;
+                    cpt_values++;
+                }
+            }
+        }
+    }
+    (*M_COO).len_values = cpt_values;
+}
+
 long cpt_nb_zeros_matrix(int *M, long long size)
 {
     /*Compte le nombre de 0 dans la matrice M à size elements*/
@@ -106,8 +145,10 @@ void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
 void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 {
     /*
-    Traduit la matrice M_COO stockée au format COO en matrice stockée en format CSR dans M_CSR
+    Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
     A la fin COO_Column=CSR_Column, COO_Value=CSR_Value, et CSR_Row est la traduction en CSR de COO_Row
+    L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
+    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
     */
     long i;
     for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
@@ -219,7 +260,6 @@ void normalize_matrix(DoubleCSRMatrix * M_CSR)
     long i;
     int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
     fill_matrix_column_sum_vector(sum_vector, M_CSR);
-
     for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
     {
         (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
@@ -359,6 +399,14 @@ void csr_to_dense_matrix(double *M, DoubleCSRMatrix * M_CSR)
 
 int main(int argc, char **argv)
 {
+    /*int my_rank, p, valeur, tag = 0;
+    MPI_Status status;
+
+    //Initialisation MPI
+    MPI_Init(&argc,&argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank); */
+
     int debug=1; //passer à 1 pour avoir plus de print
     long i,j; //pour les boucles
     long n;
@@ -366,75 +414,60 @@ int main(int argc, char **argv)
     int nb_zeros,nb_non_zeros;
     int *A;
 
-    //matrices au format COO et CSR
-    struct IntCOOMatrix A_COO;
-    struct IntCSRMatrix A_CSR;
-    struct DoubleCSRMatrix norm_A_CSR;
-
-    //variables pour la normalisation de la matrice
-    double *NormValue;
-
     if (argc < 2)
     {
         printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n", argv[0]);
         exit(1);
     }
-
     n = atoll(argv[1]);
     size = n * n;
-    A = (int *)malloc(size * sizeof(int));
 
-    for (i=0;i<n;i++)
-    {
-        init_row_dense_matrix(A, i, n, 75);
-    }
-    for (i=0;i<n;i++) //remplissage de la diagonale de 0
-    {
-        A[i*(n+1)] = 0;
-    }
+    //matrice format COO
+    struct IntCOOMatrix A_COO;
+    generate_coo_matrix(&A_COO, 0, 75, n, n);
 
-    printf("Matrice stockée \"dense\" :\n");
-    for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",A[i*n+j]);} printf("\n");}
+    nb_non_zeros = A_COO.len_values;
 
-    nb_zeros = cpt_nb_zeros_matrix(A, size);
-    nb_non_zeros = size - nb_zeros;
-
-    A_COO.len_values = A_CSR.len_values = norm_A_CSR.len_values = nb_non_zeros;
-    A_CSR.dim_l = norm_A_CSR.dim_l = n;
-    A_COO.dim_l = A_COO.dim_c = A_CSR.dim_c = norm_A_CSR.dim_c = n;
-    A_COO.Row = (int *)malloc(nb_non_zeros * sizeof(int));
-    A_CSR.Row = norm_A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
-    A_COO.Column = A_CSR.Column = norm_A_CSR.Column = (int *)malloc(nb_non_zeros * sizeof(int));
-    A_COO.Value = A_CSR.Value = (int *)malloc(nb_non_zeros * sizeof(int));
-    norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
-
-    dense_to_coo_matrix(A, &A_COO);
+    //matrice format CSR
+    struct IntCSRMatrix A_CSR;
+    A_CSR.dim_l = A_CSR.dim_c = n;
+    A_CSR.len_values = nb_non_zeros;
+    A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
+    A_CSR.Column = (int *)malloc(nb_non_zeros * sizeof(int));
+    A_CSR.Value = (int *)malloc(nb_non_zeros * sizeof(int));
     coo_to_csr_matrix(&A_COO, &A_CSR);
 
+    //matrice normalisée format CSR
+    struct DoubleCSRMatrix norm_A_CSR;
+    norm_A_CSR.len_values = nb_non_zeros;
+    norm_A_CSR.dim_l = norm_A_CSR.dim_c = n;
+    norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
+    norm_A_CSR.Column = A_CSR.Column; norm_A_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
     //copie du vecteur Value dans NormValue
     for(i=0;i<nb_non_zeros;i++) {norm_A_CSR.Value[i] = (double) A_CSR.Value[i];} //norm_A_CSR.Value = A_CSR.Value
-
-    //normalisation de la matrice (Row, Column, Value) dans (Row, Column, NormValue)
+    //normalisation de la matrice
     normalize_matrix(&norm_A_CSR);
 
     if (debug)
     {
-        printf("Nombre de zeros : %i\n",nb_zeros);
-        printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
-
-        printf("\nVecteur Row :\n");
-        for(i=0;i<n+1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
-        printf("\nVecteur Column :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%i ",norm_A_CSR.Column[i]);}
-        printf("\nVecteur Value :\n");
-        for(i=0;i<nb_non_zeros;i++) {printf("%f ",norm_A_CSR.Value[i]);} printf("\n");
-
-        printf("\nMatrice creuse stockée en format CSR:\n");
+        printf("\nMatrice stockée en format CSR :\n");
         for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%i ",get_csr_matrix_value_int(i, j, &A_CSR));} printf("\n");}
+        printf("\n");
+
+        printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
+        printf("Nombre de zeros : %i\n",size - nb_non_zeros);
+        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
+
+        printf("\nVecteur Row de norm_A_CSR :\n");
+        for(i=0;i<A_COO.dim_l + 1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
+        printf("\nVecteur Column de norm_A_CSR :\n");
+        for(i=0;i<A_COO.len_values;i++) {printf("%i ",norm_A_CSR.Column[i]);}
+        printf("\nVecteur Value de de norm_A_CSR (en sortie de normalize) :\n");
+        for(i=0;i<nb_non_zeros;i++) {printf("%.2f ",norm_A_CSR.Value[i]);}
+        printf("\n");
 
         printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
         for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &norm_A_CSR));} printf("\n");}
-        printf("\n");
     }
 
     /*Page Rank*/
@@ -451,4 +484,7 @@ int main(int argc, char **argv)
     printf("\nrésultat ");
     for(i=0;i<n;i++) {printf("%f ",q[i]);}
     printf("obtenu en %i itérations\n",nb_iterations_faites);
+
+    //MPI_Finalize();
+    return 0;
 }
