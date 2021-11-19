@@ -82,6 +82,8 @@ void generate_coo_matrix(IntCOOMatrix *M_COO, long ind_start_row, int zero_perce
     long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
     (*M_COO).dim_l = l;
     (*M_COO).dim_c = c;
+    //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
+    //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
     (*M_COO).Row = (int *)malloc(mean_nb_non_zeros * sizeof(int));
     (*M_COO).Column = (int *)malloc(mean_nb_non_zeros * sizeof(int));
     (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
@@ -422,22 +424,24 @@ int main(int argc, char **argv)
     n = atoll(argv[1]);
     size = n * n;
 
-    //matrice format COO
+    //matrice format COO :
+    //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix()
     struct IntCOOMatrix A_COO;
     generate_coo_matrix(&A_COO, 0, 75, n, n);
 
     nb_non_zeros = A_COO.len_values;
 
-    //matrice format CSR
+    //matrice format CSR :
+    //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
     struct IntCSRMatrix A_CSR;
     A_CSR.dim_l = A_CSR.dim_c = n;
     A_CSR.len_values = nb_non_zeros;
     A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
-    A_CSR.Column = (int *)malloc(nb_non_zeros * sizeof(int));
-    A_CSR.Value = (int *)malloc(nb_non_zeros * sizeof(int));
+    A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
     coo_to_csr_matrix(&A_COO, &A_CSR);
 
-    //matrice normalisée format CSR
+    //matrice normalisée format CSR :
+    //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
     struct DoubleCSRMatrix norm_A_CSR;
     norm_A_CSR.len_values = nb_non_zeros;
     norm_A_CSR.dim_l = norm_A_CSR.dim_c = n;
@@ -484,6 +488,11 @@ int main(int argc, char **argv)
     printf("\nrésultat ");
     for(i=0;i<n;i++) {printf("%f ",q[i]);}
     printf("obtenu en %i itérations\n",nb_iterations_faites);
+
+    free(q);
+    free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
+    free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
+    free(norm_A_CSR.Value); //Row et Column communs avec la matrice CSR
 
     //MPI_Finalize();
     return 0;

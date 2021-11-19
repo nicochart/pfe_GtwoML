@@ -451,4 +451,10 @@ int main(int argc, char **argv)
     printf("\nrésultat ");
     for(i=0;i<n;i++) {printf("%f ",q[i]);}
     printf("obtenu en %i itérations\n",nb_iterations_faites);
+
+    free(q);
+    free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
+    free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
+    free(norm_A_CSR.Value); //Row et Column communs avec la matrice CSR
+    return 0;
 }
