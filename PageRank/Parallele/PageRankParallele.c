@@ -1,4 +1,4 @@
-//le code tourne mais le vecteur résultat du pagerank est -nan -nan ... -nan . Ce n'est pas ce qu'on veux.
+//le code tourne et donne un résultat, mais le résultat n'a pas été vérifié
 /*Travail sur PageRank non pondéré parallele*/
 /*Nicolas HOCHART*/
 
@@ -561,7 +561,7 @@ int main(int argc, char **argv)
             sc = 0; //scalaire
             for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
             {
-                //sc += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
+                sc += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
             }
             //étape 1 : new_q = beta * P.old_q
             morceau_new_q[i] = beta * sc; //new_q[i] = beta * ligneP[i] * old_q
@@ -577,6 +577,11 @@ int main(int argc, char **argv)
         for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
 
         //-- fin itération--
+        if (debug && my_rank==0)
+        {
+            printf("--------------- itération %i :\n",cpt_iterations);
+            printf("old_q :"); for(i=0;i<n;i++) {printf("%.2f ",old_q[i]);}printf("\nnew_q : "); for(i=0;i<n;i++) {printf("%.2f ",new_q[i]);} printf("\n");
+        }
         cpt_iterations++;
         error_vect = abs_two_vector_error(new_q,old_q,n);
     }
@@ -584,8 +589,8 @@ int main(int argc, char **argv)
 
     if (my_rank == 0)
     {
-        printf("\nrésultat ");
-        for(i=0;i<n;i++) {printf("%f ",new_q[i]);}
+        printf("\nRésultat ");
+        for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
         printf("obtenu en %i itérations\n",cpt_iterations);
     }
 
