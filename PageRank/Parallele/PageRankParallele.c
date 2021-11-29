@@ -1,4 +1,3 @@
-//le code tourne et donne un résultat, mais le résultat n'a pas été vérifié
 /*Travail sur PageRank non pondéré parallele*/
 /*Nicolas HOCHART*/
 
@@ -586,6 +585,25 @@ int main(int argc, char **argv)
         error_vect = abs_two_vector_error(new_q,old_q,n);
     }
     //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
+
+    if (my_rank == 0) {printf("Matrice A :\n");}
+    MPI_Barrier(MPI_COMM_WORLD);
+    for (long k=0;k<p;k++)
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (my_rank == k)
+        {
+            for (i=0;i<nb_ligne;i++)
+            {
+                for (j=0;j<n;j++)
+                {
+                    printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
+                }
+                printf("\n");
+            }
+        }
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     if (my_rank == 0)
     {
