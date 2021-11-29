@@ -1,3 +1,4 @@
+//LE CODE COMPILE MAIS A L'EXECUTION SEGMENTATION FAULT : il y a encore du travail à faire
 /*Travail sur PageRank non pondéré parallele*/
 /*Nicolas HOCHART*/
 
@@ -414,10 +415,9 @@ int main(int argc, char **argv)
     long n;
     long long size;
     int nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
-    if (debug && my_rank == 0)
-    {
-        list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));
-    }
+
+    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
+    list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));
 
     //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
     int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
@@ -446,6 +446,7 @@ int main(int argc, char **argv)
     size = n * n;
     long nb_ligne = n/p; //nombre de lignes par bloc
 
+    //génération des sous-matrices au format COO
     //matrice format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix()
     struct IntCOOMatrix A_COO;
@@ -453,7 +454,7 @@ int main(int argc, char **argv)
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-    if (debug) {MPI_Gather(&nb_non_zeros_local, 1, MPI_INT, list_nb_non_zeros_local, 1,  MPI_INT, 0, MPI_COMM_WORLD);}
+    MPI_Allgather(&nb_non_zeros_local, 1, MPI_INT, list_nb_non_zeros_local, 1,  MPI_INT, MPI_COMM_WORLD); //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
     if (debug && my_rank == 0)
     {
@@ -471,26 +472,28 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    //matrice format CSR :
+    //convertion de la matrice COO au format CSR :
     //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
-    //struct IntCSRMatrix A_CSR;
-    //A_CSR.dim_l = A_CSR.dim_c = n;
-    //A_CSR.len_values = nb_non_zeros;
-    //A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
-    //A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
-    //coo_to_csr_matrix(&A_COO, &A_CSR);
+    struct IntCSRMatrix A_CSR;
+    A_CSR.dim_l = A_COO.dim_l;
+    A_CSR.dim_c = A_COO.dim_c;
+    A_CSR.len_values = list_nb_non_zeros_local[my_rank]; //nombre de zéro local
+    A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
+    A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
+    coo_to_csr_matrix(&A_COO, &A_CSR);
 
     //matrice normalisée format CSR :
     //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
-    //struct DoubleCSRMatrix norm_A_CSR;
-    //norm_A_CSR.len_values = nb_non_zeros;
-    //norm_A_CSR.dim_l = norm_A_CSR.dim_c = n;
-    //norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
-    //norm_A_CSR.Column = A_CSR.Column; norm_A_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
+    struct DoubleCSRMatrix P_CSR;
+    P_CSR.len_values = list_nb_non_zeros_local[my_rank]; //nombre de zéro local
+    P_CSR.dim_l = A_CSR.dim_l;
+    P_CSR.dim_c = A_CSR.dim_c;
+    P_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
+    P_CSR.Column = A_CSR.Column; P_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
     //copie du vecteur Value dans NormValue
-    //for(i=0;i<nb_non_zeros;i++) {norm_A_CSR.Value[i] = (double) A_CSR.Value[i];} //norm_A_CSR.Value = A_CSR.Value
+    for(i=0;i<nb_non_zeros;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
     //normalisation de la matrice
-    //normalize_matrix(&norm_A_CSR);
+    normalize_matrix(&P_CSR);
 
     //if (debug)
     //{
@@ -502,37 +505,86 @@ int main(int argc, char **argv)
     //    printf("Nombre de zeros : %i\n",size - nb_non_zeros);
     //    printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
 
-    //    printf("\nVecteur Row de norm_A_CSR :\n");
-    //    for(i=0;i<A_COO.dim_l + 1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
-    //    printf("\nVecteur Column de norm_A_CSR :\n");
-    //    for(i=0;i<A_COO.len_values;i++) {printf("%i ",norm_A_CSR.Column[i]);}
-    //    printf("\nVecteur Value de de norm_A_CSR (en sortie de normalize) :\n");
-    //    for(i=0;i<nb_non_zeros;i++) {printf("%.2f ",norm_A_CSR.Value[i]);}
+    //    printf("\nVecteur Row de P_CSR :\n");
+    //    for(i=0;i<A_COO.dim_l + 1;i++) {printf("%i ",P_CSR.Row[i]);}
+    //    printf("\nVecteur Column de P_CSR :\n");
+    //    for(i=0;i<A_COO.len_values;i++) {printf("%i ",P_CSR.Column[i]);}
+    //    printf("\nVecteur Value de de P_CSR (en sortie de normalize) :\n");
+    //    for(i=0;i<nb_non_zeros;i++) {printf("%.2f ",P_CSR.Value[i]);}
     //    printf("\n");
 
     //    printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
-    //    for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &norm_A_CSR));} printf("\n");}
+    //    for (i=0;i<n;i++){for (j=0;j<n;j++){printf("%.2f ",get_csr_matrix_value_double(i, j, &P_CSR));} printf("\n");}
     //}
 
     //Page Rank
-    //double beta;
-    //double *q;
-    //int maxIter = 100000,nb_iterations_faites;
-    //double epsilon = 0.00000000001;
+    double error_vect,beta;
+    double *new_q,*old_q,*tmp;
+    long cpt_iterations = 0;
+    int maxIter = 1;//100000;
+    double epsilon = 0.00000000001;
 
-    //beta = 1;
-    //q = (double *)malloc(n * sizeof(double));
-    //for (i=0;i<n;i++) {q[i] = (double) 1/n;}
+    //variables temporaires pour code parallèle
+    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc,morceau_new_q[nb_ligne];
 
-    //nb_iterations_faites = methodeDeLaPuissance(&norm_A_CSR, q, q, beta, epsilon, maxIter);
-    //printf("\nrésultat ");
-    //for(i=0;i<n;i++) {printf("%f ",q[i]);}
-    //printf("obtenu en %i itérations\n",nb_iterations_faites);
+    //init variables PageRank
+    beta = 1; error_vect=INFINITY;
+    //allocation mémoire pour old_q et new_q, et initialisation de new_q
+    new_q = (double *)malloc(n * sizeof(double));
+    old_q = (double *)malloc(n * sizeof(double));
+    for (i=0;i<n;i++) {new_q[i] = (double) 1/n;}
 
-    //free(q);
-    //free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
-    //free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
-    //free(norm_A_CSR.Value); //Row et Column communs avec la matrice CSR
+    while (error_vect > epsilon && !one_in_vector(new_q,n) && cpt_iterations<maxIter)
+    {
+        //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
+        tmp = new_q;
+        new_q = old_q;
+        old_q = tmp;
+        tmp_sum = sum_totale_new_q;
+        sum_totale_new_q = sum_totale_old_q;
+        sum_totale_old_q = tmp_sum;
+        //-- itération sur new_q --
+        //iterationMP(P, new_q, old_q, n, beta);
+
+        // calcul du produit matrice-vecteur new_q= P * old_q et de la somme des carrés total
+        sum_new_q = 0;
+        for(i=0; i<nb_ligne; i++)
+        {
+            sc = 0; //scalaire
+            printf("%i -> %i\n",P_CSR.Row[i],P_CSR.Row[i+1]); //SEGMENTATION FAULT : problème dans les valeurs que l'on parcours ici
+            for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
+            {
+                //sc += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
+            }
+            //étape 1 : new_q = beta * P.old_q
+            morceau_new_q[i] = beta * sc; //new_q[i] = beta * ligneP[i] * old_q
+            //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
+            to_add = sum_totale_old_q * (1-beta)/n; //sum_total_old_q contient déjà la somme des éléments de old_q
+            morceau_new_q[i] = morceau_new_q[i] + to_add;
+            sum_new_q  += sc;
+        }
+        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+
+        MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD); //récupération des morceaux de new_q dans new_q, dans tout les processus
+        //étape 3 : normalisation de q
+        for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
+
+        //-- fin itération--
+        cpt_iterations++;
+        error_vect = abs_two_vector_error(new_q,old_q,n);
+    }
+    //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
+    //copy_vector_value(new_q,q_end,n); //q_end = new_q
+    //free(new_q);free(old_q);
+
+    printf("\nrésultat ");
+    for(i=0;i<n;i++) {printf("%f ",new_q[i]);}
+    printf("obtenu en %i itérations\n",cpt_iterations);
+
+    free(new_q); free(old_q);
+    free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
+    free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
+    free(P_CSR.Value); //Row et Column communs avec la matrice CSR
 
     if (debug && my_rank == 0)
     {
