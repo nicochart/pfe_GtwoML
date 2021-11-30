@@ -7,11 +7,15 @@
 #include <math.h>
 #include <mpi.h>
 
+/*-------------------------------------------------------------------
+--- Structures pour le stockage des matrices au format COO et CSR ---
+-------------------------------------------------------------------*/
+
 struct IntCOOMatrix
 {
-     int * Row; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
-     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
-     int * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Row; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
+     int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
+     int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      long dim_l; //nombre de lignes
      long dim_c; //nombre de colonnes
      long len_values; //taille des vecteurs Row, Column et Value
@@ -21,8 +25,8 @@ typedef struct IntCOOMatrix IntCOOMatrix;
 struct IntCSRMatrix
 {
      int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
-     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
-     int * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
+     int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      long dim_l; //nombre de lignes
      long dim_c; //nombre de colonnes
      long len_values;  //taille des vecteurs Column et Value
@@ -32,13 +36,17 @@ typedef struct IntCSRMatrix IntCSRMatrix;
 struct DoubleCSRMatrix
 {
      int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
-     int * Column; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
-     double * Value; //vecteur de taille "nombre d'éléments non nuls dans la matrice"
+     int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
+     double * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      long dim_l; //nombre de lignes
      long dim_c; //nombre de colonnes
      long len_values; //taille des vecteurs Column et Value
 };
 typedef struct DoubleCSRMatrix DoubleCSRMatrix;
+
+/*--------------------------
+--- Décision "aléatoire" ---
+--------------------------*/
 
 float random_between_0_and_1()
 {
@@ -46,109 +54,15 @@ float random_between_0_and_1()
     return (float) rand() / (float) RAND_MAX;
 }
 
-void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
-{
-    /*
-    Rempli n éléments de la ligne i de la matrice M.
-    Il y a zero_percentage % de chances que le nombre soit 0.
-    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
-    */
-    long j;
-
-    for (j=0;j<n;j++)
-    {
-        if (random_between_0_and_1() < zero_percentage/100.0) //zero_percentage % de chances de mettre un 0
-        {
-            *(M + i*n+j) = 0;
-        }
-        else
-        {
-            *(M + i*n+j) = 1;
-        }
-    }
-}
-
-void generate_coo_matrix(IntCOOMatrix *M_COO, long ind_start_row, int zero_percentage, long l, long c)
-{
-    /*
-    Génère la matrice creuse (*M_COO).
-    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
-    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence le morceau
-    Statistiquement, dans la matrice dense correspondante, il y a zero_percentage % de 0.
-    Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
-    Ce n'est pas exact, car un test est effectué en plus pour éviter les 1 dans la diagonale.
-    */
-    long i,j,cpt_values,size=l*c;
-    long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
-    (*M_COO).dim_l = l;
-    (*M_COO).dim_c = c;
-    //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
-    //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
-    (*M_COO).Row = (int *)malloc(mean_nb_non_zeros * sizeof(int));
-    (*M_COO).Column = (int *)malloc(mean_nb_non_zeros * sizeof(int));
-    (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
-
-    cpt_values=0;
-    for (i=0;i<l;i++) //parcours des lignes
-    {
-        for (j=0;j<c;j++) //parcours des lignes
-        {
-            if ( (ind_start_row+i)!=j && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
-            {
-                if (cpt_values < mean_nb_non_zeros)
-                {
-                    (*M_COO).Row[cpt_values] = i;
-                    (*M_COO).Column[cpt_values] = j;
-                    (*M_COO).Value[cpt_values] = 1;
-                    cpt_values++;
-                }
-            }
-        }
-    }
-    (*M_COO).len_values = cpt_values;
-}
-
-long cpt_nb_zeros_matrix(int *M, long long size)
-{
-    /*Compte le nombre de 0 dans la matrice M à size elements*/
-    long compteur = 0;
-    for (int d=0;d<size;d++)
-    {
-        if (*(M+d) == 0)
-        {
-            compteur++;
-        }
-    }
-    return compteur;
-}
-
-void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
-{
-    /*
-    Traduit la matrice stockée normalement dans M en matrice stockée en format COO dans M_COO.
-    Les vecteurs Row, Column et Value sont de taille "nombre d'éléments non nulles dans la matrice".
-    Les dimensions de la matrice (dim_l,dim_c) = (nombre de lignes, nombre de colonnes) doivent déjà être définis dans M_COO. Les allocations mémoires doivent aussi être fait au préalable.
-    */
-    long i, j, nb = 0;
-    for (i=0;i<(*M_COO).dim_l;i++)
-    {
-        for (j=0;j<(*M_COO).dim_c;j++)
-        {
-            if (*(M + i*(*M_COO).dim_c+j) != 0)
-            {
-                (*M_COO).Row[nb] = i; (*M_COO).Column[nb] = j;
-                (*M_COO).Value[nb] = *(M+i*(*M_COO).dim_c+j);
-                nb++;
-            }
-        }
-    }
-}
+/*---------------------------------
+--- Opérations sur les matrices ---
+---------------------------------*/
 
 void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 {
     /*
     Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
-    A la fin COO_Column=CSR_Column, COO_Value=CSR_Value, et CSR_Row est la traduction en CSR de COO_Row
+    A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
     L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
     Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
     */
@@ -187,9 +101,8 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 {
     /*
-    Renvoie la valeur [indl,indc] de la matrice CSR stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
-    l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
-    Le vecteur Value doit être un vecteur d'entiers.
+    Renvoie la valeur [indl,indc] de la matrice M_CSR stockée au format CSR.
+    Le vecteur à l'adresse (*M_CSR).Value doit être un vecteur d'entiers.
     */
     int *Row,*Column,*Value;
     Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
@@ -202,20 +115,16 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
     long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
-        if (Column[i] == indc)
-        {
-            return Value[i];
-        }
+        if (Column[i] == indc) {return Value[i];}
     }
-    return 0;
+    return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
 }
 
 double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR)
 {
     /*
-    Renvoie la valeur [indl,indc] de la matrice CSR stockée dans Row,Column,Value. len_values est la longueur du vecteur Value.
-    l le nombre de lignes de la matrice (longueur du vecteur Row - 1) et c le nombre de colonnes.
-    Le vecteur Value doit être un vecteur de doubles.
+    Renvoie la valeur [indl,indc] de la matrice M_CSR stockée au format CSR.
+    Le vecteur à l'adresse (*M_CSR).Value doit être un vecteur de doubles.
     */
     int *Row,*Column; double *Value;
     Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
@@ -228,20 +137,28 @@ double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR
     long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
-        if (Column[i] == indc)
-        {
-            return Value[i];
-        }
+        if (Column[i] == indc) {return Value[i];}
     }
-    return 0;
+    return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
 }
 
-void fill_matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
+long cpt_nb_zeros_matrix(int *M, long long size)
+{
+    /*Compte le nombre de 0 dans la matrice M stockée comme un vecteur d'entiers à size elements*/
+    long compteur = 0;
+    for (int d=0;d<size;d++)
+    {
+        if (*(M+d) == 0) {compteur++;}
+    }
+    return compteur;
+}
+
+void matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
 {
     /*
-    Ecrit dans sum_vector (vecteur de taille c) la somme des éléments de chaque colonnes d'une matrice au format CSR (Row (ici non utilisé),Column,Value).
+    Ecrit dans sum_vector (vecteur de taille (*M_CSR).dim_c) la somme des éléments colonne par colonne de la matrice à l'adresse M_CSR.
     Chaque case d'indice i du sum_vector contiendra la somme des éléments de la colonne du même indice i.
-    len_values est la longueur du vecteur Value, et c le nombre de colonnes de la matrice.
+    L'allocation mémoire du vecteur sum_vector doit être faite au préalable.
     */
     int i;
     for (i=0;i<(*M_CSR).dim_c;i++) //initialisation du vecteur sum_vector
@@ -255,22 +172,20 @@ void fill_matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
     }
 }
 
-void normalize_matrix(DoubleCSRMatrix * M_CSR)
+void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
 {
     /*
-    Normalise la matrice CSR M_CSR en utilisant le vecteur sum_vector (contenant déjà la somme des éléments colonne par colonne)
+    Normalise la matrice CSR M_CSR sur les colonnes.
     */
     long i;
     int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
-    fill_matrix_column_sum_vector(sum_vector, M_CSR);
+    matrix_column_sum_vector(sum_vector, M_CSR);
     for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
     {
         (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
     }
     free(sum_vector);
 }
-
-/*Fonctions pour PageRank*/
 
 void matrix_vector_product(double *y, double *A, double *x, int n)
 {
@@ -302,6 +217,92 @@ void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
     }
 }
 
+/*--------------------------------------------------------------------------------
+--- Fonctions pour génération de matrices ou changement de formats de matrices ---
+--------------------------------------------------------------------------------*/
+
+void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
+{
+    /*
+    Rempli n éléments de la ligne i de la matrice M stockée comme un vecteur d'entiers.
+    Il y a zero_percentage % de chances que le nombre soit 0.
+    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
+    */
+    long j;
+
+    for (j=0;j<n;j++)
+    {
+        if (random_between_0_and_1() < zero_percentage/100.0) {*(M + i*n+j) = 0;} //zero_percentage % de chances de mettre un 0
+        else {*(M + i*n+j) = 1;}
+    }
+}
+
+void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, int zero_percentage, long l, long c)
+{
+    /*
+    Génère aléatoirement la matrice creuse (*M_COO) (format COO) pour PageRank.
+    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
+    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
+    Statistiquement, il y a zero_percentage % de 0 dans la matrice l*c.
+    Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
+    (Ce n'est pas exact, car un test est effectué avec ind_start_row pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
+    */
+    long i,j,cpt_values,size=l*c;
+    long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
+    (*M_COO).dim_l = l; (*M_COO).dim_c = c;
+    //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
+    //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
+    (*M_COO).Row = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+    (*M_COO).Column = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+    (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
+
+    cpt_values=0;
+    for (i=0;i<l;i++) //parcours des lignes
+    {
+        for (j=0;j<c;j++) //parcours des lignes
+        {
+            if ( (ind_start_row+i)!=j && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
+            {
+                if (cpt_values < mean_nb_non_zeros)
+                {
+                    (*M_COO).Row[cpt_values] = i;
+                    (*M_COO).Column[cpt_values] = j;
+                    (*M_COO).Value[cpt_values] = 1;
+                    cpt_values++;
+                }
+            }
+        }
+    }
+    (*M_COO).len_values = cpt_values;
+}
+
+void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
+{
+    /*
+    Traduit la matrice stockée normalement dans M en matrice stockée en format COO dans M_COO.
+    Les vecteurs Row, Column et Value sont de taille "nombre d'éléments non nulles dans la matrice".
+    Les dimensions de la matrice (dim_l,dim_c) = (nombre de lignes, nombre de colonnes) doivent déjà être définis dans M_COO. Les allocations mémoires doivent aussi être fait au préalable.
+    */
+    long i, j, nb = 0;
+    for (i=0;i<(*M_COO).dim_l;i++)
+    {
+        for (j=0;j<(*M_COO).dim_c;j++)
+        {
+            if (*(M + i*(*M_COO).dim_c+j) != 0)
+            {
+                (*M_COO).Row[nb] = i; (*M_COO).Column[nb] = j;
+                (*M_COO).Value[nb] = *(M+i*(*M_COO).dim_c+j);
+                nb++;
+            }
+        }
+    }
+}
+
+/*---------------------------------
+--- Opérations sur les vecteurs ---
+---------------------------------*/
+
 int one_in_vector(double *vect, int size)
 {
     //retourne 1 s'il y a un "1" dans le vecteur (permet de tester un cas particulier du PageRank lorsque beta = 1)
@@ -314,11 +315,9 @@ int one_in_vector(double *vect, int size)
 
 double vector_norm(double *vect, int size)
 {
+    /* somme les éléments du vecteur de doubles à l'adresse vect de taille size, et renvoie le résultat */
     double sum=0;
-    for (int i=0;i<size;i++)
-    {
-        sum+=vect[i];
-    }
+    for (int i=0;i<size;i++) {sum+=vect[i];}
     return sum;
 }
 
@@ -326,11 +325,7 @@ double abs_two_vector_error(double *vect1, double *vect2, int size)
 {
     /*Calcul l'erreur entre deux vecteurs de taille "size"*/
     double sum=0;
-    for (int i=0;i<size;i++)
-    {
-        sum += fabs(vect1[i] - vect2[i]);
-        //printf("%f - %f ; sum = %f\n",vect1[i],vect2[i],sum);
-    }
+    for (int i=0;i<size;i++) {sum += fabs(vect1[i] - vect2[i]);}
     return sum;
 }
 
@@ -340,65 +335,9 @@ void copy_vector_value(double *vect1, double *vect2, int size)
     for (int i=0;i<size;i++) {vect2[i] = vect1[i];}
 }
 
-void iterationMP(DoubleCSRMatrix *P, double *new_q, double *old_q, int n, double beta)
-{
-    /*
-    Fait une itération de la méthode de la puissance
-    P est la matrice de passage, old_q le vecteur pagerank q précédent, et n la dimension de la matrice
-    */
-    int i;
-    double norme_old_q,norme_new_q,to_add;
-    //étape 1 : new_q = beta * P.old_q
-    csr_matrix_vector_product(new_q,P,old_q);
-    for (i=0;i<n;i++) {new_q[i] *= beta;}
-    //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
-    norme_old_q = vector_norm(old_q,n);
-    to_add = norme_old_q * (1-beta)/n;
-    for (i=0;i<n;i++) {new_q[i] += to_add;}
-    //étape 3 : normalisation de q
-    norme_new_q = vector_norm(new_q,n);
-    for (i=0;i<n;i++) {new_q[i] *= 1/norme_new_q;}
-}
-
-int methodeDeLaPuissance(DoubleCSRMatrix *P, double *q_init, double *q_end, double beta, double epsilon, int maxIter)
-{
-    /*
-    Applique la méthode de la puissance au vecteur initial q_init passé en paramètre, avec la matrice de passage P passée en paramètre
-    */
-    long n=(*P).dim_c,i,cpt = 0;
-    double *new_q = (double *)malloc(n * sizeof(double));
-    double *old_q = (double *)malloc(n * sizeof(double));
-    double *tmp;
-    copy_vector_value(q_init,old_q,n); //old_q = q_init
-    copy_vector_value(q_init,new_q,n); //new_q = q_init
-    for (i=0;i<n;i++) {old_q[i] *= 1000;} //init pour avoir une différence
-    while (abs_two_vector_error(new_q,old_q,n) > epsilon && !one_in_vector(new_q,n) && cpt<maxIter)
-    {
-        /*old_q = new_q <=> copy_vector_value(new_q,old_q,n)*/
-        tmp = new_q;
-        new_q = old_q;
-        old_q = tmp;
-        /*itération sur new_q*/
-        iterationMP(P, new_q, old_q, n, beta);
-        cpt++;
-    }
-    copy_vector_value(new_q,q_end,n); //q_end = new_q
-    free(new_q);free(old_q);
-    return cpt;
-}
-
-void csr_to_dense_matrix(double *M, DoubleCSRMatrix * M_CSR)
-{
-    /*Fonction temporaire pour faire un pagerank avec une matrice stockée normalement*/
-    int i,j;
-    for (i=0;i<(*M_CSR).dim_l;i++)
-    {
-        for (j=0;j<(*M_CSR).dim_c;j++)
-        {
-            *(M+i*(*M_CSR).dim_c+j) = get_csr_matrix_value_double(i, j, M_CSR);
-        }
-    }
-}
+/*----------
+--- Main ---
+----------*/
 
 int main(int argc, char **argv)
 {
@@ -410,8 +349,8 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=1; //passer à 1 pour avoir plus de print
-    long i,j; //pour les boucles
+    int debug=0; //passer à 1 pour afficher les print de débuggage
+    long i,j,k; //pour les boucles
     long n;
     long long size;
     int nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
@@ -448,9 +387,9 @@ int main(int argc, char **argv)
 
     //génération des sous-matrices au format COO
     //matrice format COO :
-    //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix()
+    //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
     struct IntCOOMatrix A_COO;
-    generate_coo_matrix(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
+    generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
@@ -513,7 +452,7 @@ int main(int argc, char **argv)
     //copie du vecteur Value dans NormValue
     for(i=0;i<nb_non_zeros_local;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
     //normalisation de la matrice
-    normalize_matrix(&P_CSR);
+    normalize_matrix_on_columns(&P_CSR);
 
     if (debug)
     {
@@ -588,7 +527,7 @@ int main(int argc, char **argv)
 
     if (my_rank == 0) {printf("Matrice A :\n");}
     MPI_Barrier(MPI_COMM_WORLD);
-    for (long k=0;k<p;k++)
+    for (k=0;k<p;k++)
     {
         MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == k)
