@@ -343,25 +343,20 @@ void copy_vector_value(double *vect1, double *vect2, int size)
 
 int main(int argc, char **argv)
 {
-    int my_rank, p, valeur, tag = 0;
+    int my_rank, nb_allocated_cores, valeur, tag = 0;
     MPI_Status status;
 
     //Initialisation MPI
     MPI_Init(&argc,&argv);
-    MPI_Comm_size(MPI_COMM_WORLD, &p);
+    MPI_Comm_size(MPI_COMM_WORLD, &nb_allocated_cores);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=0; //passer à 1 pour afficher les print de débuggage
+    int p; //nombre de coeurs utilisés parmis ceux alloués
+    int debug=1; //passer à 1 pour afficher les print de débuggage
     long i,j,k; //pour les boucles
     long n;
     long long size;
     int nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
-
-    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
-    if (debug) {list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));}
-
-    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
-    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
 
     if (argc < 2)
     {
@@ -369,6 +364,26 @@ int main(int argc, char **argv)
         exit(1);
     }
     n = atoll(argv[1]);
+    size = n * n;
+
+    p = nb_allocated_cores;
+    while (n%p !=0)
+    {
+        p--; //on décrémente le nombre de coeurs utilisés jusqu'à ce que p divise n.
+    }
+
+    if (my_rank == 0) {printf("Nombre de coeurs choisis = %i",p);}
+
+    if (my_rank <=p)
+    {
+    long nb_ligne = n/p; //nombre de lignes par bloc
+
+    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
+    if (debug) {list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));}
+
+    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
+    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
+
     if (argc > 2)
     {
         for (i=2;i<argc && i<p+2;i++)
@@ -383,9 +398,6 @@ int main(int argc, char **argv)
         for (i=0;i<p;i++) {printf("%i ",zeros_percentages[i]);}
         printf("\n");
     }
-
-    size = n * n;
-    long nb_ligne = n/p; //nombre de lignes par bloc
 
     //génération des sous-matrices au format COO
     //matrice format COO :
@@ -511,7 +523,7 @@ int main(int argc, char **argv)
             sum_new_q  += sc;
         }
         MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
-
+        //ca coince : Allgather et Allreduce attendent des valeurs de tout les processus...... y compris ceux non utilisés
         MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD); //récupération des morceaux de new_q dans new_q, dans tout les processus
         //étape 3 : normalisation de q
         for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
@@ -561,6 +573,7 @@ int main(int argc, char **argv)
     if (debug && my_rank == 0)
     {
         free(list_nb_non_zeros_local);
+    }
     }
     MPI_Finalize();
     return 0;
