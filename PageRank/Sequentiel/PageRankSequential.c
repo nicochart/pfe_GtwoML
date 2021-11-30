@@ -119,6 +119,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
     int * COO_Row = (*M_COO).Row;
     int * CSR_Row = (*M_CSR).Row;
     long current_indl = 0;
+    *(CSR_Row + current_indl) = 0; //0 à l'indice 0
     while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
     {
         *(CSR_Row + current_indl) = 0;
@@ -404,6 +405,9 @@ int main(int argc, char **argv)
     A_COO.dim_l = A_COO.dim_c = A_CSR.dim_c = norm_A_CSR.dim_c = n;
     A_COO.Row = (int *)malloc(nb_non_zeros * sizeof(int));
     A_CSR.Row = norm_A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
+    //le code séquentiel de conversion coo -> csr marchait mais je ne sais pas pourquoi :
+    //le vecteur row était initialisé rempli de 0 "sans raison" dès le malloc. (impression du vecteur à la place de ce commentaire pour vérifier à l'appuis)
+    //dans le code parallèle, ce n'était pas le cas. L'indice 0 du vecteur row était donc une valeur entière non initialisée.
     A_COO.Column = A_CSR.Column = norm_A_CSR.Column = (int *)malloc(nb_non_zeros * sizeof(int));
     A_COO.Value = A_CSR.Value = (int *)malloc(nb_non_zeros * sizeof(int));
     norm_A_CSR.Value = (double *)malloc(nb_non_zeros * sizeof(double));
@@ -422,11 +426,14 @@ int main(int argc, char **argv)
         printf("Nombre de zeros : %i\n",nb_zeros);
         printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
 
-        printf("\nVecteur Row :\n");
+        printf("\nVecteur A_COO.Row :\n");
+        for(i=0;i<nb_non_zeros;i++) {printf("%i ",A_COO.Row[i]);}
+
+        printf("\nVecteur norm_A_CSR.Row :\n");
         for(i=0;i<n+1;i++) {printf("%i ",norm_A_CSR.Row[i]);}
-        printf("\nVecteur Column :\n");
+        printf("\nVecteur norm_A_CSR.Column :\n");
         for(i=0;i<nb_non_zeros;i++) {printf("%i ",norm_A_CSR.Column[i]);}
-        printf("\nVecteur Value :\n");
+        printf("\nVecteur norm_A_CSR.Value :\n");
         for(i=0;i<nb_non_zeros;i++) {printf("%f ",norm_A_CSR.Value[i]);} printf("\n");
 
         printf("\nMatrice creuse stockée en format CSR:\n");
