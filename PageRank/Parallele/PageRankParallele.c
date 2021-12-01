@@ -44,6 +44,27 @@ struct DoubleCSRMatrix
 };
 typedef struct DoubleCSRMatrix DoubleCSRMatrix;
 
+/*----------------------------------------------------------------------
+--- Structure contenant les informations d'un cerveau et ses parties ---
+----------------------------------------------------------------------*/
+
+struct BrainPart
+{
+     int nbTypeNeuron;
+     double * repartitionNeuronCumulee; //taille nbTypeNeuron
+     double * probaConnection; //taille (ligne) nbTypeNeuron * (colonne) nb_part
+};
+typedef struct BrainPart BrainPart;
+
+struct Brain
+{
+     int dimension; //nombre de neurones total
+     int nb_part; //nombre de parties
+     int * parties_cerveau; //taille nb_part - indices de 0 à n (dimension de la matrice) auxquels commencent les parties du cerveau
+     BrainPart * brainPart; //taille nb_part - adresse d'un vecteur de pointeurs vers des BrainPart.
+};
+typedef struct Brain Brain;
+
 /*--------------------------
 --- Décision "aléatoire" ---
 --------------------------*/
@@ -52,6 +73,43 @@ float random_between_0_and_1()
 {
     /*Renvoie un nombre aléatoire entre 0 et 1. Permet de faire une décision aléatoire*/
     return (float) rand() / (float) RAND_MAX;
+}
+
+/*---------------------------------
+--- Opérations sur les cerveaux ---
+---------------------------------*/
+
+int get_brain_part_ind(long ind, Brain * brain)
+{
+    /*
+    Renvoie l'indice de la partie du cerveau dans laquelle le neurone "ind" se situe
+    Brain est supposé être un cerveau bien formé et ind est supposé être entre 0 et brain.dimension
+    */
+    int * parts_cerv = (*brain).parties_cerveau;
+    if (ind >= parts_cerv[(*brain).nb_part - 1])
+    {
+        return (*brain).nb_part - 1;
+    }
+    int i=0;
+    while (ind >= parts_cerv[i+1])
+    {
+        i++;
+    }
+    return i;
+}
+
+int get_neuron_type(Brain * brain, int part)
+{
+    /*Choisi de quel type sera le neurone en fonction du cerveau et de la partie auxquels il appartient*/
+    int i;
+    //int nbTypeNeuron = (*brain).brainPart[part].nbTypeNeuron;
+    double * repNCumulee = (*brain).brainPart[part].repartitionNeuronCumulee; //Repartition cumulée des neurones dans les parties
+    double decision = random_between_0_and_1();
+    while (repNCumulee[i] < decision)
+    {
+        i++;
+    }
+    return i;
 }
 
 /*---------------------------------
@@ -275,6 +333,92 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
         }
     }
     (*M_COO).len_values = cpt_values;
+}
+
+/*
+-- Nouvelle implémentation de la génération de matrice COO : --
+Variables :
+n = dimension de la matrice à générer
+nb_part = nombre de parties du cerveau qu'on souhaite représenter
+p = nombre de coeurs alloués (= nombre de blocs de ligne)
+
+Entrée :
+1) vecteur "parties_cerveau" d'entiers de taille nb_part (contenant nb_part valeurs, croissantes, de 0 à n)
+---> indique (à l'indice i) la ligne de la matrice à laquelle commence la partie d'indice i du cerveau
+Ce vecteur servira pour connaître la partie du cerveau qu'on manipule au niveau des lignes, et aussi au niveau des colonnes.
+
+2) nb_part tableaux "probaConnection" de taille nbTypeNeuron * nb_part associés avec un vecteur "repartitionNeuronCumulee" de taille nbTypeNeuron
+---> repartitionNeuronCumulee contient à l'indice i la probabilité (cumulée avec les précédentes) que le neurone (dans la partie du cerveau dans laquelle il apparaît) soit effectivement un neurone de ce type.
+---> probaConnection indique à la ligne d'indice i les probabilités, d'indice de colonne j (0 -> nb_part), pour que le type de neurone i se connecte à la partie d'indice j du cerveau
+Ces deux données permettront, lors de la génération d'une partie du cerveau, de choisir (pour une ligne) le type de neurone qu'elle représentera,
+puis (pour chaque colonne, avec des probas != pour chaque partie du cerveau) choisir si on met une connection ou non.
+
+Algorithme de génération :
+Parcours des lignes (indice indl):
+    On regarde dans quelle partie du cerveau on est avec "parties_cerveau" : on est à la partie d'indice indp
+    On décide de quel type de neuronne (indice indn entre 0 et nbTypeNeuron) sera la ligne avec le "repartitionNeuronCumulee" associé à la partie du cerveau d'indice indp
+    On parcours les colonnes (indice indc):
+        On regarde à quelle partie du cerveau on essaye de se connecter (indice indpco)
+        On prend une décision en fonction de la valeur du tableau "probaConnection" (ligne indn, colonne indpco)
+*/
+
+void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, long l, long c)
+{
+    /*
+    Génère aléatoirement la matrice creuse (*M_COO) (format COO) pour PageRank.
+    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    Attention : on suppose brain.dimension = c
+    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
+    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
+    Statistiquement, il y a zero_percentage % de 0 dans la matrice l*c.
+    Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
+    (Ce n'est pas exact, car un test est effectué avec ind_start_row pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
+    */
+    long i,j,cpt_values,size=l*c;
+    int ind_part_source,ind_part_dest,i_type; double proba_connection;
+    (*M_COO).dim_l = l; (*M_COO).dim_c = c;
+
+    //Vecteurs temporaires de taille "size" (nombre de valeurs max que peut atteindre la matrice) temporaire.
+    //A la fin, la mémoire tout juste nécéssaire est allouée puis les valeurs sont déplacées.
+    int tmp_Row[size];
+    int tmp_Column[size];
+
+    cpt_values=0;
+    for (i=0;i<l;i++) //parcours des lignes
+    {
+        //on regarde dans quelle partie du cerveau on est
+        ind_part_source = get_brain_part_ind(ind_start_row+i, brain);
+        //décision du type de neurone
+        i_type = get_neuron_type(brain, ind_part_source);
+        for (j=0;j<c;j++) //parcours des lignes
+        {
+            //on regarde dans quelle partie du cerveau on se dirige
+            ind_part_dest = get_brain_part_ind(ind_start_row+j, brain);
+            //on regarde la probabilité pour qu'il y ait une connection entre les deux parties
+            proba_connection = (*brain).brainPart[ind_part_source].probaConnection[i_type*(*brain).nb_part + ind_part_dest];
+            //puis on prend une décision aléatoire
+            if ( (ind_start_row+i)!=j && random_between_0_and_1() > (1 - proba_connection)) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
+            {
+                tmp_Row[cpt_values] = i;
+                tmp_Column[cpt_values] = j;
+                cpt_values++;
+            }
+        }
+    }
+    //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
+    //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
+    (*M_COO).Row = (int *)malloc(cpt_values * sizeof(int));
+    (*M_COO).Column = (int *)malloc(cpt_values * sizeof(int));
+    (*M_COO).Value = (int *)malloc(cpt_values * sizeof(int));
+    (*M_COO).len_values = cpt_values;
+
+    for (i=0; i<cpt_values;i++)
+    {
+        (*M_COO).Row[i] = tmp_Row[i];
+        (*M_COO).Column[i] = tmp_Column[i];
+        (*M_COO).Value[i] = 1;
+    }
+    //on a plus besoin de tmp_Row et tmp_Column
 }
 
 void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
