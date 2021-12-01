@@ -1,4 +1,5 @@
 /*Travail sur PageRank non pondéré parallele*/
+/* SEGMENTATION FAULT A L'EXECUTION : le générateur de matrice COO generate_coo_brain_matrix_for_pagerank pose problème (voir plus bas) */
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -380,8 +381,9 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
 
     //Vecteurs temporaires de taille "size" (nombre de valeurs max que peut atteindre la matrice) temporaire.
     //A la fin, la mémoire tout juste nécéssaire est allouée puis les valeurs sont déplacées.
-    int tmp_Row[size];
-    int tmp_Column[size];
+    //TODO : trouver un moyen d'écrire directement dans Row,Column et Value de la matrice. Utiliser Realloc ? Faire une estimation du nombre de valeurs ?..
+    int tmp_Row[size]; //PROBLEME ICI : size est trop grand pour crée un tableau directement.
+    int tmp_Column[size]; //PROBLEME ICI : size est trop grand pour crée un tableau directement.
 
     cpt_values=0;
     for (i=0;i<l;i++) //parcours des lignes
@@ -529,11 +531,122 @@ int main(int argc, char **argv)
     size = n * n;
     long nb_ligne = n/p; //nombre de lignes par bloc
 
+    //Cerveau écrit en brute (pour essayer)
+    int nbTypeNeuronIci,nb_part=8;
+    BrainPart brainPart[nb_part];
+    int part_cerv[nb_part];
+    int nb_neurone_par_partie = n / nb_part;
+    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de 8 svp\n"); exit(1);}
+    for (i=0; i<nb_part; i++)
+    {
+        part_cerv[i] = i*nb_neurone_par_partie;
+    }
+    //partie 1
+    nbTypeNeuronIci = 2;
+    double repNCumulee1[2] = {0.5, 1};
+    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[0].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[0].repartitionNeuronCumulee = repNCumulee1;
+    brainPart[0].probaConnection = probCo1;
+    //partie 2
+    nbTypeNeuronIci = 1;
+    double repNCumulee2[1] = {1};
+    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4};
+    brainPart[1].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[1].repartitionNeuronCumulee = repNCumulee2;
+    brainPart[1].probaConnection = probCo2;
+    //partie 3
+    nbTypeNeuronIci = 2;
+    double repNCumulee3[2] = {0.7, 1};
+    double probCo3[16] = {/*type 1*/0.1, 0.5, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[2].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[2].repartitionNeuronCumulee = repNCumulee3;
+    brainPart[2].probaConnection = probCo3;
+    //partie 4
+    nbTypeNeuronIci = 3;
+    double repNCumulee4[3] = {0.5, 0.9, 1};
+    double probCo4[24] = {/*type 1*/0.4, 0.5, 0.5, 0.1, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.5, 0.2, 0.5, 0.6, 0.5, 0.45, 0.0, /*type 3*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[3].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[3].repartitionNeuronCumulee = repNCumulee4;
+    brainPart[3].probaConnection = probCo4;
+    //partie 5
+    nbTypeNeuronIci = 1;
+    double repNCumulee5[1] = {1};
+    double probCo5[8] = {/*type 1*/0.4, 0.4, 0.4, 0.5, 0.1, 0.4, 0.5, 0.4};
+    brainPart[4].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[4].repartitionNeuronCumulee = repNCumulee5;
+    brainPart[4].probaConnection = probCo5;
+    //partie 6
+    nbTypeNeuronIci = 1;
+    double repNCumulee6[1] = {1};
+    double probCo6[8] = {/*type 1*/0.4, 0.4, 0.4, 0.55, 0.4, 0.1, 0.6, 0.4};
+    brainPart[5].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[5].repartitionNeuronCumulee = repNCumulee6;
+    brainPart[5].probaConnection = probCo6;
+    //partie 7
+    nbTypeNeuronIci = 1;
+    double repNCumulee7[1] = {1};
+    double probCo7[8] = {/*type 1*/0.4, 0.2, 0.4, 0.6, 0.4, 0.4, 0.05, 0.4};
+    brainPart[6].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[6].repartitionNeuronCumulee = repNCumulee7;
+    brainPart[6].probaConnection = probCo7;
+    //partie 8
+    nbTypeNeuronIci = 2;
+    double repNCumulee8[2] = {0.3, 1};
+    double probCo8[16] = {/*type 1*/0.05, 0.05, 0.1, 0.05, 0.2, 0.1, 0.1, 0.5, /*type 2*/0.4, 0.5, 0.4, 0.6, 0.4, 0.4, 0.05, 0.1};
+    brainPart[7].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[7].repartitionNeuronCumulee = repNCumulee8;
+    brainPart[7].probaConnection = probCo8;
+
+    Brain Cerveau;
+    Cerveau.dimension = n;
+    Cerveau.nb_part = nb_part;
+    Cerveau.parties_cerveau = part_cerv;
+    Cerveau.brainPart = brainPart;
+
+    if (my_rank == 0)
+    {
+      printf("\n#############\nRecap de votre cerveau :\n");
+
+      printf("Taille : %i*%i\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
+      for (i=0; i<Cerveau.nb_part; i++)
+      {
+          printf("%i ",Cerveau.parties_cerveau[i]);
+      }
+      printf("]\n\n");
+      for (i=0; i<Cerveau.nb_part; i++)
+      {
+          printf("\n");
+          printf("Partie %i :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
+          printf("Probabilités cumulées d'appartenir à chaque type de neurone : [");
+          for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
+          {
+              printf("%lf ",Cerveau.brainPart[i].repartitionNeuronCumulee[j]);
+          }
+          printf("]\n\tConnections :\n\t");
+          for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
+          {
+              printf("Connections du type de neurone d'indice %i :\n\t",j);
+              for (k=0;k<Cerveau.nb_part;k++)
+              {
+                  printf("%i -> %i : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
+              }
+          }
+      }
+
+      printf("\n");
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
     //génération des sous-matrices au format COO
     //matrice format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
     struct IntCOOMatrix A_COO;
-    generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
+    //generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
+
+    //matrice COO générée à partir du cerveau
+    generate_coo_brain_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, &Cerveau, nb_ligne, n); //SEGMENTATION FAULT
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
