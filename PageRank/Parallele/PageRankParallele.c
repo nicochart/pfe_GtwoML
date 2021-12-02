@@ -120,7 +120,6 @@ int get_neuron_type(Brain * brain, int part)
         exit(1);
     }
     int i=0;
-    //int nbTypeNeuron = (*brain).brainPart[part].nbTypeNeuron;
     double * repNCumulee = (*brain).brainPart[part].repartitionNeuronCumulee; //Repartition cumulée des neurones dans les parties
     double decision = random_between_0_and_1();
     while (repNCumulee[i] < decision)
@@ -369,7 +368,7 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
     cpt_values=0;
     for (i=0;i<l;i++) //parcours des lignes
     {
-        for (j=0;j<c;j++) //parcours des lignes
+        for (j=0;j<c;j++) //parcours des colonnes
         {
             if ( (ind_start_row+i)!=j && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
             {
@@ -449,7 +448,7 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
     cpt_values=0;
     for (i=0;i<l;i++) //parcours des lignes
     {
-        //on regarde dans quelle partie du cerveau on est
+        //récupération de l'indice de la partie source
         ind_part_source = get_brain_part_ind(ind_start_row+i, brain);
         //décision du type de neurone
         i_type = get_neuron_type(brain, ind_part_source);
@@ -458,15 +457,15 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
             (*debugInfo).types[i] = i_type;
             (*debugInfo).nb_connections[i] = 0;
         }
-        for (j=0;j<c;j++) //parcours des lignes
+        for (j=0;j<c;j++) //parcours des colonnes
         {
-            //on regarde dans quelle partie du cerveau on se dirige
+            //récupération de l'indice de la partie destination
             ind_part_dest = get_brain_part_ind(j, brain);
-            //on regarde la probabilité pour qu'il y ait une connection entre les deux parties
+            //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[i_type*(*brain).nb_part + ind_part_dest];
-            //puis on prend une décision aléatoire
             proba_no_connection = 1 - proba_connection;
             random = random_between_0_and_1();
+            //décision aléatoire, en prenant en compte l'abscence de connexion sur la diagonale de façon brute
             if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
             {
                 if (cpt_values >= total_memory_allocated)
@@ -861,29 +860,38 @@ int main(int argc, char **argv)
     }
     //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
 
-    int partie,type,nbco;
-    MPI_Barrier(MPI_COMM_WORLD);
-    if (my_rank == 0) {printf("Matrice A :\n");}
-    MPI_Barrier(MPI_COMM_WORLD);
-    for (k=0;k<p;k++)
+    if (debug_cerveau)
     {
+        int partie,type,nbco;
         MPI_Barrier(MPI_COMM_WORLD);
-        if (my_rank == k)
+        if (my_rank == 0) {printf("Matrice A :\n");}
+        MPI_Barrier(MPI_COMM_WORLD);
+        for (k=0;k<p;k++)
         {
-            for (i=0;i<nb_ligne;i++)
+            MPI_Barrier(MPI_COMM_WORLD);
+            if (my_rank == k)
             {
-                for (j=0;j<n;j++)
+                for (i=0;i<nb_ligne;i++)
                 {
-                    printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
-                }
-                if (debug_cerveau)
-                {
+                    if (n<=64) //si la dimension de la matrice est inférieur ou égal à 64, on peut l'afficher
+                    {
+                        for (j=0;j<n;j++)
+                        {
+                            printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
+                        }
+                    }
+                    else
+                    {
+                        nbco = MatrixDebugInfo.nb_connections[i];
+                        printf("%03li \"0\" et %03li \"1\" -",n-nbco,nbco);
+                    }
+
                     partie = get_brain_part_ind(my_rank*nb_ligne+i, &Cerveau);
                     type = MatrixDebugInfo.types[i];
                     nbco = MatrixDebugInfo.nb_connections[i];
                     printf(" type: %i, partie: %i, nbconnections: %i, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,get_mean_connect_percentage_for_part(&Cerveau, partie, type));
+                    printf("\n");
                 }
-                printf("\n");
             }
         }
     }
