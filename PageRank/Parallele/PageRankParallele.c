@@ -61,9 +61,9 @@ typedef struct BrainPart BrainPart;
 
 struct Brain
 {
-     int dimension; //nombre de neurones total
+     long dimension; //nombre de neurones total
      int nb_part; //nombre de parties
-     int * parties_cerveau; //taille nb_part - indices de 0 à n (dimension de la matrice) auxquels commencent les parties du cerveau
+     long * parties_cerveau; //taille nb_part - indices de 0 à n (dimension de la matrice) auxquels commencent les parties du cerveau
      BrainPart * brainPart; //taille nb_part - adresse d'un vecteur de pointeurs vers des BrainPart.
 };
 typedef struct Brain Brain;
@@ -71,10 +71,10 @@ typedef struct Brain Brain;
 //structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_coo_brain_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
-     int dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
-     int dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
+     long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
+     long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
      int * types; //vecteur de taille dimension_l indiquant le type choisi pour chaque neurones
-     int * nb_connections; //vecteur de taille dimension_l indiquant le nombre de connections qu'a effectué chaque neurone
+     long * nb_connections; //vecteur de taille dimension_l indiquant le nombre de connections qu'a effectué chaque neurone
 };
 typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 
@@ -98,7 +98,7 @@ int get_brain_part_ind(long ind, Brain * brain)
     Renvoie l'indice de la partie du cerveau dans laquelle le neurone "ind" se situe
     Brain est supposé être un cerveau bien formé et ind est supposé être entre 0 et brain.dimension
     */
-    int * parts_cerv = (*brain).parties_cerveau;
+    long * parts_cerv = (*brain).parties_cerveau;
     if (ind >= parts_cerv[(*brain).nb_part - 1])
     {
         return (*brain).nb_part - 1;
@@ -132,15 +132,15 @@ int get_neuron_type(Brain * brain, int part)
 int get_nb_neuron_brain_part(Brain * brain, int part)
 {
     /*Renvoie le nombre de neurones dans la partie d'indice part*/
-    int n = (*brain).dimension;
-    int ind_depart = (*brain).parties_cerveau[part]; //indice de depart auquel commence la partie
+    long n = (*brain).dimension;
+    long ind_depart = (*brain).parties_cerveau[part]; //indice de depart auquel commence la partie
     if (part+1 == (*brain).nb_part)
     {
         return n - ind_depart;
     }
     else
     {
-        int ind_fin = (*brain).parties_cerveau[part+1];
+        long ind_fin = (*brain).parties_cerveau[part+1];
         return ind_fin - ind_depart;
     }
 }
@@ -148,7 +148,7 @@ int get_nb_neuron_brain_part(Brain * brain, int part)
 double get_mean_connect_percentage_for_part(Brain * brain, int part, int type)
 {
     /*Renvoie le pourcentage (entre 0 et 100) de chances de connection moyen pour un neurone de type donné dans une partie donnée, vers les autres parties*/
-    int n,i;
+    long n,i;
     int nb_part;
     double * probCo = (*brain).brainPart[part].probaConnection; //Proba de connection vers chaque partie
     n = (*brain).dimension;
@@ -436,7 +436,7 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
         (*debugInfo).dim_l = l; (*debugInfo).dim_c = c;
         //Attention : ces malloc ne sont pas "free" dans la fonction !
         (*debugInfo).types = (int *)malloc((*debugInfo).dim_l * sizeof(int));
-        (*debugInfo).nb_connections = (int *)malloc((*debugInfo).dim_l * sizeof(int));
+        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_l * sizeof(long));
     }
 
     //La mémoire allouée est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
@@ -604,8 +604,8 @@ int main(int argc, char **argv)
     //Cerveau écrit en brute (pour essayer)
     int nbTypeNeuronIci,nb_part=8;
     BrainPart brainPart[nb_part];
-    int part_cerv[nb_part];
-    int nb_neurone_par_partie = n / nb_part;
+    long part_cerv[nb_part];
+    long nb_neurone_par_partie = n / nb_part;
     if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de 8 svp\n"); exit(1);}
     for (i=0; i<nb_part; i++)
     {
@@ -862,7 +862,8 @@ int main(int argc, char **argv)
 
     if (debug_cerveau)
     {
-        int partie,type,nbco;
+        long nbco;
+        int partie,type;
         MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == 0) {printf("Matrice A :\n");}
         MPI_Barrier(MPI_COMM_WORLD);
@@ -889,7 +890,7 @@ int main(int argc, char **argv)
                     partie = get_brain_part_ind(my_rank*nb_ligne+i, &Cerveau);
                     type = MatrixDebugInfo.types[i];
                     nbco = MatrixDebugInfo.nb_connections[i];
-                    printf(" type: %i, partie: %i, nbconnections: %i, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,get_mean_connect_percentage_for_part(&Cerveau, partie, type));
+                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,get_mean_connect_percentage_for_part(&Cerveau, partie, type));
                     printf("\n");
                 }
             }
