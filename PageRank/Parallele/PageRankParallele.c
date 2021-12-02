@@ -1,5 +1,4 @@
 /*Travail sur PageRank non pondéré parallele*/
-/* SEGMENTATION FAULT A L'EXECUTION : le générateur de matrice COO generate_coo_brain_matrix_for_pagerank pose problème (voir plus bas) */
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -7,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include <mpi.h>
+#include <assert.h>
 
 /*-------------------------------------------------------------------
 --- Structures pour le stockage des matrices au format COO et CSR ---
@@ -102,7 +102,12 @@ int get_brain_part_ind(long ind, Brain * brain)
 int get_neuron_type(Brain * brain, int part)
 {
     /*Choisi de quel type sera le neurone en fonction du cerveau et de la partie auxquels il appartient*/
-    int i;
+    if (part >= (*brain).nb_part)
+    {
+        printf("Erreur dans get_neuron_type : numéro de partie %i supérieur au nombre de parties dans le cerveau %i.\n",part,(*brain).nb_part);
+        exit(1);
+    }
+    int i=0;
     //int nbTypeNeuron = (*brain).brainPart[part].nbTypeNeuron;
     double * repNCumulee = (*brain).brainPart[part].repartitionNeuronCumulee; //Repartition cumulée des neurones dans les parties
     double decision = random_between_0_and_1();
@@ -371,19 +376,19 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
     Attention : on suppose brain.dimension = c
     ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
     Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
-    Statistiquement, il y a zero_percentage % de 0 dans la matrice l*c.
-    Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
-    (Ce n'est pas exact, car un test est effectué avec ind_start_row pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
+    Le pourcentage de valeurs (1 ou 0) dans la matrice est choisi en fonction du cerveau "brain" passé en paramètre.
+
+    Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
     */
     long i,j,cpt_values,size=l*c;
-    int ind_part_source,ind_part_dest,i_type; double proba_connection;
+    int ind_part_source,ind_part_dest,i_type; double proba_connection,proba_no_connection,random;
     (*M_COO).dim_l = l; (*M_COO).dim_c = c;
 
-    //Vecteurs temporaires de taille "size" (nombre de valeurs max que peut atteindre la matrice) temporaire.
-    //A la fin, la mémoire tout juste nécéssaire est allouée puis les valeurs sont déplacées.
-    //TODO : trouver un moyen d'écrire directement dans Row,Column et Value de la matrice. Utiliser Realloc ? Faire une estimation du nombre de valeurs ?..
-    int tmp_Row[size]; //PROBLEME ICI : size est trop grand pour crée un tableau directement.
-    int tmp_Column[size]; //PROBLEME ICI : size est trop grand pour crée un tableau directement.
+    //La mémoire allouée est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
+    long basic_size = (long) size/10;
+    long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
+    (*M_COO).Row = (int *)malloc(total_memory_allocated * sizeof(int));
+    (*M_COO).Column = (int *)malloc(total_memory_allocated * sizeof(int));
 
     cpt_values=0;
     for (i=0;i<l;i++) //parcours des lignes
@@ -399,28 +404,28 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
             //on regarde la probabilité pour qu'il y ait une connection entre les deux parties
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[i_type*(*brain).nb_part + ind_part_dest];
             //puis on prend une décision aléatoire
-            if ( (ind_start_row+i)!=j && random_between_0_and_1() > (1 - proba_connection)) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
+            proba_no_connection = 1 - proba_connection;
+            random = random_between_0_and_1();
+            if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
             {
-                tmp_Row[cpt_values] = i;
-                tmp_Column[cpt_values] = j;
+                if (cpt_values >= total_memory_allocated)
+                {
+                    total_memory_allocated *= 2;
+                    (*M_COO).Row = (int *) realloc((*M_COO).Row, total_memory_allocated * sizeof(int));
+                    (*M_COO).Column = (int *) realloc((*M_COO).Column, total_memory_allocated * sizeof(int));
+                    assert((*M_COO).Row != NULL);
+                    assert((*M_COO).Column != NULL);
+                }
+                (*M_COO).Row[cpt_values] = i;
+                (*M_COO).Column[cpt_values] = j;
                 cpt_values++;
             }
         }
     }
-    //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
-    //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
-    (*M_COO).Row = (int *)malloc(cpt_values * sizeof(int));
-    (*M_COO).Column = (int *)malloc(cpt_values * sizeof(int));
+    //remplissage du vecteur Value (avec précisement le nombre de 1 nécéssaire)
     (*M_COO).Value = (int *)malloc(cpt_values * sizeof(int));
     (*M_COO).len_values = cpt_values;
-
-    for (i=0; i<cpt_values;i++)
-    {
-        (*M_COO).Row[i] = tmp_Row[i];
-        (*M_COO).Column[i] = tmp_Column[i];
-        (*M_COO).Value[i] = 1;
-    }
-    //on a plus besoin de tmp_Row et tmp_Column
+    for (i=0; i<cpt_values;i++) {(*M_COO).Value[i] = 1;}
 }
 
 void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
@@ -646,7 +651,7 @@ int main(int argc, char **argv)
     //generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
 
     //matrice COO générée à partir du cerveau
-    generate_coo_brain_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, &Cerveau, nb_ligne, n); //SEGMENTATION FAULT
+    generate_coo_brain_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, &Cerveau, nb_ligne, n);
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
@@ -782,6 +787,7 @@ int main(int argc, char **argv)
     }
     //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
 
+    MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {printf("Matrice A :\n");}
     MPI_Barrier(MPI_COMM_WORLD);
     for (k=0;k<p;k++)
