@@ -461,7 +461,7 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
         for (j=0;j<c;j++) //parcours des lignes
         {
             //on regarde dans quelle partie du cerveau on se dirige
-            ind_part_dest = get_brain_part_ind(ind_start_row+j, brain);
+            ind_part_dest = get_brain_part_ind(j, brain);
             //on regarde la probabilité pour qu'il y ait une connection entre les deux parties
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[i_type*(*brain).nb_part + ind_part_dest];
             //puis on prend une décision aléatoire
