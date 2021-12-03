@@ -730,7 +730,7 @@ int main(int argc, char **argv)
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
     if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_INT, list_nb_non_zeros_local, 1,  MPI_INT, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
-    if (debug && my_rank == 0)
+    if ((debug || debug_cerveau) && my_rank == 0)
     {
         printf("nb_non_zeros total = %i\n",nb_non_zeros);
         printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
@@ -864,6 +864,7 @@ int main(int argc, char **argv)
     {
         long nbco;
         int partie,type;
+        double pourcentage_espere,sum_pourcentage_espere = 0,sum_pourcentage_espere_local = 0;
         MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == 0) {printf("Matrice A :\n");}
         MPI_Barrier(MPI_COMM_WORLD);
@@ -890,10 +891,17 @@ int main(int argc, char **argv)
                     partie = get_brain_part_ind(my_rank*nb_ligne+i, &Cerveau);
                     type = MatrixDebugInfo.types[i];
                     nbco = MatrixDebugInfo.nb_connections[i];
-                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,get_mean_connect_percentage_for_part(&Cerveau, partie, type));
+                    pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
+                    sum_pourcentage_espere_local += pourcentage_espere;
+                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
                     printf("\n");
                 }
             }
+        }
+        MPI_Allreduce(&sum_pourcentage_espere_local, &sum_pourcentage_espere, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        if (my_rank == 0)
+        {
+            printf("\nPourcentage global : %.2f, pourcentage global espéré : %.2f\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
