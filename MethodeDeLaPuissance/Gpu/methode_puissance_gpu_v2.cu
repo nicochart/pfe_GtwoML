@@ -52,17 +52,17 @@ __global__ void prodmatvectKernel(REAL_T *d_A, REAL_T *d_X, REAL_T *d_Y, int n)
 }
 
 //Kernel 2 : Somme des éléments d'un vecteur pour calcul de norme par réduction. k permet de savoir à quelle étape on est.
-__global__ void somme_elements_vecteur(REAL_T *d_vect, int k, int n, REAL_T *d_norm)
+__global__ void somme_elements_vecteur(REAL_T *d_vect_source, REAL_T *d_vect_dest, int k, int n, REAL_T *d_norm)
 {
 		unsigned int i = blockDim.x*blockIdx.x+threadIdx.x;
 		if (i<n)
 		{
 			if (i % k == 0)
 			{
-				d_vect[i] = fabs(d_vect[i]) + fabs(d_vect[i + k/2]);
+				d_vect_dest[i] = fabs(d_vect_source[i]) + fabs(d_vect_source[i + k/2]);
 			}
 		}
-    *d_norm = d_vect[0]; //à chaque fois, on copie la valeur à l'indice 0 dans un autre vecteur. Si on est pas à la dernière étape de la reduction, cette valeur n'a pas de sens.
+    *d_norm = d_vect_dest[0]; //à chaque fois, on copie la valeur à l'indice 0 dans un autre vecteur. Si on est pas à la dernière étape de la reduction, cette valeur n'a pas de sens.
 }
 
 //Kernel 3 : Divise l'ensemble des éléments d'un vecteur par un reel et calcule le vecteur erreur contenant les erreurs locales
@@ -93,16 +93,6 @@ __global__ void vectorInit(REAL_T *d_X, int n)
 	if (i < n)
 	{
 		d_X[i] = 1.0 / (double) n;
-	}
-}
-
-//Kernel 6 : Copie de vect2 dans vect1
-__global__ void vectorCopy(REAL_T *d_vect1, REAL_T *d_vect2, int n)
-{
-	unsigned int i = blockDim.x*blockIdx.x+threadIdx.x;
-	if (i < n)
-	{
-		d_vect1[i] = d_vect2[i];
 	}
 }
 
@@ -165,24 +155,25 @@ int main(int argc, char **argv)
         //Lancement de Kernel 1 (asynchrone) (calcul vecteur y)
         prodmatvectKernel<<<tailleGrille,threadsParBloc>>>(d_A,d_X,d_Y,n);
 
-				//Lancement de Kernel 6 (copie de d_Y dans d_Y_tmpsum)
-				vectorCopy<<<tailleGrille,threadsParBloc>>>(d_Y_tmpsum, d_Y, n);
-
-				for (k=2;k<=n;k*=2)
+        /*** Calcul de ||y|| par réduction ***/
+        //Plusieurs lancements du Kernel 2 (étapes de réduction pour calcul de norme)
+        //Début de la réduction (cas particulier : on envoie le résultat des sommes dans un autre vecteur, pour conserver Y pour l'itération suivante)
+        somme_elements_vecteur<<<tailleGrille,threadsParBloc>>>(d_Y,d_Y_tmpsum,2,n,d_norm);
+        //Suite de la réduction
+				for (k=4;k<=n;k*=2)
 				{
-        	//Plusieurs lancements du Kernel 2 (étapes de réduction pour calcul de norme)
-        	somme_elements_vecteur<<<tailleGrille,threadsParBloc>>>(d_Y_tmpsum,2,n,d_norm);
+        	somme_elements_vecteur<<<tailleGrille,threadsParBloc>>>(d_Y_tmpsum,d_Y_tmpsum,k,n,d_norm);
 				}
 
-        /*** y <--- y / ||y||   &   vecteur erreur ***/
+        /*** y <--- y / ||y||   &   Err <--- x - y ***/
         //Lancement de Kernel 3 (normalisation + calul du vecteur erreur)
         normAndError<<<tailleGrille,threadsParBloc>>>(d_Y,d_norm,d_X,d_Err,n);
 
-        /*** error <--- ||x - y|| ***/
+        /*** Calcul de error = ||Err|| par réduction : error <--- ||x - y|| ***/
 				for (k=2;k<=n;k*=2)
 				{
 					//Plusieurs lancements du Kernel 2 (étapes de réduction pour calcul de norme)
-        	somme_elements_vecteur<<<tailleGrille,threadsParBloc>>>(d_Err,k,n,d_error);
+        	somme_elements_vecteur<<<tailleGrille,threadsParBloc>>>(d_Err,d_Err,k,n,d_error);
 				}
 
         //transfert GPU -> CPU de d_error vers error
