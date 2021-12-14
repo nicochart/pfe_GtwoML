@@ -80,8 +80,8 @@ struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
      long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
-     int * types; //vecteur de taille dimension_l indiquant le type choisi pour chaque neurones
-     long * nb_connections; //vecteur de taille dimension_l indiquant le nombre de connections qu'a effectué chaque neurone
+     int * types; //vecteur de taille dim_l indiquant le type choisi pour chaque neurones
+     long * nb_connections; //vecteur de taille dim_l indiquant le nombre de connections qu'a effectué chaque neurone
 };
 typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 
@@ -118,12 +118,12 @@ int get_brain_part_ind(long ind, Brain * brain)
     return i;
 }
 
-int get_neuron_type(Brain * brain, int part)
+int choose_neuron_type(Brain * brain, int part)
 {
     /*Choisi de quel type sera le neurone en fonction du cerveau et de la partie auxquels il appartient*/
     if (part >= (*brain).nb_part)
     {
-        printf("Erreur dans get_neuron_type : numéro de partie %i supérieur au nombre de parties dans le cerveau %i.\n",part,(*brain).nb_part);
+        printf("Erreur dans choose_neuron_type : numéro de partie %i supérieur au nombre de parties dans le cerveau %i.\n",part,(*brain).nb_part);
         exit(1);
     }
     int i=0;
@@ -265,7 +265,7 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
         //récupération de l'indice de la partie source
         ind_part_source = get_brain_part_ind(ind_start_row+i, brain);
         //décision du type de neurone
-        i_type = get_neuron_type(brain, ind_part_source);
+        i_type = choose_neuron_type(brain, ind_part_source);
         if (debugInfo != NULL)
         {
             (*debugInfo).types[i] = i_type;
@@ -587,7 +587,7 @@ int main(int argc, char **argv)
             {
                 for (i=0;i<nb_ligne;i++)
                 {
-                    if (n<=64) //si la dimension de la matrice est inférieur ou égal à 64, on peut l'afficher
+                    if (n<=32) //si la dimension de la matrice est inférieur ou égal à 32, on peut l'afficher
                     {
                         for (j=0;j<n;j++)
                         {
@@ -605,7 +605,7 @@ int main(int argc, char **argv)
                     nbco = MatrixDebugInfo.nb_connections[i];
                     pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
                     sum_pourcentage_espere_local += pourcentage_espere;
-                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
+                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage obtenu : %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
                     printf("\n");
                 }
             }

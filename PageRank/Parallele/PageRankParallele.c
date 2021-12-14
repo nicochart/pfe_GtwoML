@@ -111,12 +111,12 @@ int get_brain_part_ind(long ind, Brain * brain)
     return i;
 }
 
-int get_neuron_type(Brain * brain, int part)
+int choose_neuron_type(Brain * brain, int part)
 {
     /*Choisi de quel type sera le neurone en fonction du cerveau et de la partie auxquels il appartient*/
     if (part >= (*brain).nb_part)
     {
-        printf("Erreur dans get_neuron_type : numéro de partie %i supérieur au nombre de parties dans le cerveau %i.\n",part,(*brain).nb_part);
+        printf("Erreur dans choose_neuron_type : numéro de partie %i supérieur au nombre de parties dans le cerveau %i.\n",part,(*brain).nb_part);
         exit(1);
     }
     int i=0;
@@ -451,7 +451,7 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
         //récupération de l'indice de la partie source
         ind_part_source = get_brain_part_ind(ind_start_row+i, brain);
         //décision du type de neurone
-        i_type = get_neuron_type(brain, ind_part_source);
+        i_type = choose_neuron_type(brain, ind_part_source);
         if (debugInfo != NULL)
         {
             (*debugInfo).types[i] = i_type;
