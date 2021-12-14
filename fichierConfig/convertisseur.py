@@ -1,5 +1,11 @@
 import json
 
+def writeData(out):
+    #Ecriture
+    f = open("param.cfg","w")
+    f.write(out)
+    f.close()
+
 
 def loadData(file):
     with open(file) as f:
@@ -40,6 +46,7 @@ def probaConnection(data):
     return probaConnect
 
 data = loadData("configCortex.json")
-print(numberNeuronCumul(data))
-print(distribNeuronCumul(data))
-print(probaConnection(data))
+out = "neuronByPart = "+str(numberNeuronCumul(data))+"\n"
+out += "neuronType = "+str(distribNeuronCumul(data))+"\n"
+out += "probaConnection = "+str(probaConnection(data))+"\n"
+writeData(out)
