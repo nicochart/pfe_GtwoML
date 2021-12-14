@@ -365,10 +365,10 @@ int main(int argc, char **argv)
     long i,j,k; //pour les boucles
     long n;
     long long size;
-    int nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
+    long nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
 
     //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
-    if (debug) {list_nb_non_zeros_local = (int *)malloc(p * sizeof(int));}
+    if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
 
     //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
     int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
@@ -523,8 +523,8 @@ int main(int argc, char **argv)
     }
 
     nb_non_zeros_local = A_COO.len_values;
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-    if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_INT, list_nb_non_zeros_local, 1,  MPI_INT, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
+    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_LONG, list_nb_non_zeros_local, 1,  MPI_LONG, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
     if ((debug || debug_cerveau) && my_rank == 0)
     {
