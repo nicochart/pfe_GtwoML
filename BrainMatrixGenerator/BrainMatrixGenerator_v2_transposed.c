@@ -8,7 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <sys/time.h>
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
@@ -369,6 +369,17 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
     *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
 }
 
+/*---------------------
+--- Mesure de temps ---
+---------------------*/
+
+double my_gettimeofday()
+{
+    struct timeval tmp_time;
+    gettimeofday(&tmp_time, NULL);
+    return tmp_time.tv_sec + (tmp_time.tv_usec * 1.0e-6L);
+}
+
 /*----------
 --- Main ---
 ----------*/
@@ -391,6 +402,8 @@ int main(int argc, char **argv)
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
+
+    double start_time, total_time;
 
     //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
     if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
@@ -529,6 +542,7 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
+    start_time = my_gettimeofday();
 
     //génération des sous-matrices au format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
@@ -557,6 +571,9 @@ int main(int argc, char **argv)
     {
         generate_coo_brain_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    total_time = my_gettimeofday() - start_time;
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
@@ -626,7 +643,7 @@ int main(int argc, char **argv)
                             printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
                         }
                     }
-                    else
+                    else if (nb_ligne <= 64) //affichage seulement si le nombre de ligne par processus est inférieur ou égal à 64
                     {
                         nbco = MatrixDebugInfo.nb_connections[i];
                         printf("%03li \"0\" et %03li \"1\" -",n-nbco,nbco);
@@ -637,8 +654,11 @@ int main(int argc, char **argv)
                     nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
                     pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
                     sum_pourcentage_espere_local += pourcentage_espere;
-                    printf(" type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
-                    printf("\n");
+                    if (nb_ligne <= 64) //affichage seulement si le nombre de ligne par processus est inférieur ou égal à 64
+                    {
+                        printf(" type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
+                        printf("\n");
+                    }
                 }
             }
         }
@@ -650,6 +670,7 @@ int main(int argc, char **argv)
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0) {printf("Temps écoulé lors de la génération : %.1f s\n", total_time);}
 
     free(local_types); free(neuron_types);
     free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
