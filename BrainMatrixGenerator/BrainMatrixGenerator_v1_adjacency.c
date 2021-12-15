@@ -526,12 +526,6 @@ int main(int argc, char **argv)
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
     if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_LONG, list_nb_non_zeros_local, 1,  MPI_LONG, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
-    if ((debug || debug_cerveau) && my_rank == 0)
-    {
-        printf("nb_non_zeros total = %i\n",nb_non_zeros);
-        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
-    }
-
     if (debug && my_rank == 0)
     {
         printf("Liste des nombres de 1 locaux :\n");
@@ -611,9 +605,10 @@ int main(int argc, char **argv)
             }
         }
         MPI_Allreduce(&sum_pourcentage_espere_local, &sum_pourcentage_espere, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == 0)
         {
-            printf("\nPourcentage global : %.2f, pourcentage global espéré : %.2f\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
+            printf("\nPourcentage global : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);

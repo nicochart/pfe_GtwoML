@@ -80,6 +80,8 @@ struct DebugBrainMatrixInfo
      long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
      int * types; //vecteur de taille dim_c indiquant le type choisi pour chaque neurones du cerveau
      long * nb_connections; //vecteur de taille dim_c indiquant le nombre de connections qu'a effectué chaque neurone.
+     long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.
+     long cpt_values; //nombre de connexions (de 1 dans la matrice générée).
 };
 typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 
@@ -315,6 +317,12 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
             }
         }
     }
+    //remplissage de la structure de débuggage
+    if (debugInfo != NULL)
+    {
+        (*debugInfo).total_memory_allocated = total_memory_allocated;
+        (*debugInfo).cpt_values = cpt_values;
+    }
     //remplissage du vecteur Value (avec précisement le nombre de 1 nécéssaire)
     (*M_COO).Value = (int *)malloc(cpt_values * sizeof(int));
     (*M_COO).len_values = cpt_values;
@@ -380,7 +388,7 @@ int main(int argc, char **argv)
     long i,j,k; //pour les boucles
     long n;
     long long size;
-    long nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
+    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
 
@@ -555,10 +563,16 @@ int main(int argc, char **argv)
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
     if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_LONG, list_nb_non_zeros_local, 1,  MPI_LONG, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
-    if ((debug || debug_cerveau) && my_rank == 0)
+    if (debug_cerveau)
     {
-        printf("nb_non_zeros total = %i\n",nb_non_zeros);
-        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
+        total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
+        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+        MatrixDebugInfo.cpt_values = nb_non_zeros;
+
+        if (my_rank == 0)
+        {
+            printf("Mémoire totale allouée : %li\nNombre de cases mémoires utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+        }
     }
 
     if (debug && my_rank == 0)
@@ -640,9 +654,10 @@ int main(int argc, char **argv)
             }
         }
         MPI_Allreduce(&sum_pourcentage_espere_local, &sum_pourcentage_espere, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == 0)
         {
-            printf("\nPourcentage global : %.2f, pourcentage global espéré : %.2f\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
+            printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -658,6 +673,7 @@ int main(int argc, char **argv)
     if (debug_cerveau)
     {
         free(MatrixDebugInfo.nb_connections);
+        free(nb_connections_local_tmp);
     }
     MPI_Finalize();
     return 0;
