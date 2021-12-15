@@ -505,13 +505,11 @@ int main(int argc, char **argv)
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    //génération des sous-matrices au format COO
-    //matrice format COO :
+    //génération des sous-matrices au format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
     struct IntCOOMatrix A_COO;
-    //generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
 
-    //matrice COO générée à partir du cerveau
+    //Génération de la matrice COO à partir du cerveau
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
@@ -536,16 +534,6 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    if (debug)
-    {
-        printf("\nVecteur A_COO.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Row[i]);}printf("\n");
-        printf("Vecteur A_COO.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Column[i]);}printf("\n");
-        printf("Vecteur A_COO.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Value[i]);}printf("\n");
-    }
-
     //convertion de la matrice COO au format CSR :
     //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
     struct IntCSRMatrix A_CSR;
@@ -556,7 +544,7 @@ int main(int argc, char **argv)
     A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
     coo_to_csr_matrix(&A_COO, &A_CSR);
 
-    if (debug)
+    if (debug && nb_non_zeros <= 256)
     {
         printf("\nVecteur A_CSR.Row dans my_rank=%i:\n",my_rank);
         for(i=0;i<A_CSR.dim_l+1;i++) {printf("%i ",A_CSR.Row[i]);}printf("\n");
