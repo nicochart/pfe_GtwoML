@@ -3,7 +3,7 @@
 
 /*
  Ce générateur génère directement la matrice AT (matrice d'adjacence A transposée)
- La matrice est actuellement générées en COO mais sera bientôt directement générée en CSR
+ La matrice est directement générée en CSR
 */
 
 #include <stdio.h>
@@ -18,17 +18,6 @@
 /*-------------------------------------------------------------------
 --- Structures pour le stockage des matrices au format COO et CSR ---
 -------------------------------------------------------------------*/
-
-struct IntCOOMatrix
-{
-     int * Row; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     long dim_l; //nombre de lignes
-     long dim_c; //nombre de colonnes
-     long len_values; //taille des vecteurs Row, Column et Value
-};
-typedef struct IntCOOMatrix IntCOOMatrix;
 
 struct IntCSRMatrix
 {
@@ -73,7 +62,7 @@ struct Brain
 };
 typedef struct Brain Brain;
 
-//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_coo_brain_matrix_for_pagerank"
+//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
@@ -216,38 +205,10 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
 
-/*
--- Nouvelle implémentation de la génération de matrice COO : --
-Ce générateur génère directement la matrice d'adjascence. Il ne reste que l'étape de normalisation par colonnes à effectuer et on peut appliquer PageRank.
-Variables :
-n = dimension de la matrice à générer
-nb_part = nombre de parties du cerveau qu'on souhaite représenter
-p = nombre de coeurs alloués (= nombre de blocs de ligne)
-
-Entrée :
-1) vecteur "parties_cerveau" d'entiers de taille nb_part (contenant nb_part valeurs, croissantes, de 0 à n)
----> indique (à l'indice i) la ligne de la matrice à laquelle commence la partie d'indice i du cerveau
-Ce vecteur servira pour connaître la partie du cerveau qu'on manipule au niveau des lignes, et aussi au niveau des colonnes.
-
-2) nb_part tableaux "probaConnection" de taille nbTypeNeuron * nb_part associés avec un vecteur "repartitionNeuronCumulee" de taille nbTypeNeuron
----> repartitionNeuronCumulee contient à l'indice i la probabilité (cumulée avec les précédentes) que le neurone (dans la partie du cerveau dans laquelle il apparaît) soit effectivement un neurone de ce type.
----> probaConnection indique à la ligne d'indice i les probabilités, d'indice de colonne j (0 -> nb_part), pour que le type de neurone i se connecte à la partie d'indice j du cerveau
-Ces deux données permettront, lors de la génération d'une partie du cerveau, de choisir (pour une ligne) le type de neurone qu'elle représentera,
-puis (pour chaque colonne, avec des probas != pour chaque partie du cerveau) choisir si on met une connection ou non.
-
-Algorithme de génération :
-Parcours des lignes (indice indl):
-    On regarde dans quelle partie du cerveau on est avec "parties_cerveau" : on est à la partie d'indice indp
-    On décide de quel type de neuronne (indice indn entre 0 et nbTypeNeuron) sera la ligne avec le "repartitionNeuronCumulee" associé à la partie du cerveau d'indice indp
-    On parcours les colonnes (indice indc):
-        On regarde à quelle partie du cerveau on essaye de se connecter (indice indpco)
-        On prend une décision en fonction de la valeur du tableau "probaConnection" (ligne indn, colonne indpco)
-*/
-
-void generate_coo_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
+void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
     /*
-    Génère aléatoirement la matrice creuse (pointeur M_CSR, format COO), pour PageRank, correspondant à un cerveau passé en paramètre.
+    Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
     l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
     neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
     Attention : on suppose brain.dimension = c
@@ -328,46 +289,6 @@ void generate_coo_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
     (*M_CSR).Value = (int *)malloc(cpt_values * sizeof(int));
     (*M_CSR).len_values = cpt_values;
     for (i=0; i<cpt_values;i++) {(*M_CSR).Value[i] = 1;}
-}
-
-void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
-{
-    /*
-    Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
-    A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
-    L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
-    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
-    */
-    long i;
-    for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
-    {
-        (*M_CSR).Column[i] = (*M_COO).Column[i];
-        (*M_CSR).Value[i] = (*M_COO).Value[i];
-    }
-
-    int * COO_Row = (*M_COO).Row;
-    int * CSR_Row = (*M_CSR).Row;
-    long current_indl = 0;
-    *(CSR_Row + current_indl) = 0;
-    while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
-    {
-        *(CSR_Row + current_indl) = 0;
-        current_indl++;
-    }
-    for (i=0;i<(*M_COO).len_values;i++)
-    {
-        if (COO_Row[i] != current_indl)
-        {
-            *(CSR_Row + current_indl + 1) = i;
-            while (COO_Row[i] != current_indl + 1) //cas particulier : ligne de la matrice vide (<=> indice de Row qui passe d'un nombre i à un nombre j supérieur à i+1)
-            {
-                current_indl++;
-                *(CSR_Row + current_indl + 1) = i;
-            }
-            current_indl = COO_Row[i];
-        }
-    }
-    *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
 }
 
 /*---------------------
@@ -545,8 +466,8 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     start_time = my_gettimeofday();
 
-    //génération des sous-matrices au format COO :
-    //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
+    //génération des sous-matrices au format CSR :
+    //3 ALLOCATIONS : allocation de mémoire pour CSR_Row, CSR_Column et CSR_Value dans la fonction generate_csr_matrix_for_pagerank()
     struct IntCSRMatrix A_CSR;
 
     local_types = (int *)malloc(nb_ligne * sizeof(int)); //vecteur local (spécifique à chaque processus) contenant les types des neurones my_rank * nb_ligne à (my_rank + 1) * nb_ligne
@@ -555,11 +476,11 @@ int main(int argc, char **argv)
     generate_neuron_types(&Cerveau, my_rank*nb_ligne, nb_ligne, local_types);
     MPI_Allgather(local_types, nb_ligne, MPI_INT, neuron_types, nb_ligne,  MPI_INT, MPI_COMM_WORLD); //réunion dans chaque processus des types de tout les neurones (pour génération)
 
-    //Génération de la matrice COO à partir du cerveau
+    //Génération de la matrice CSR à partir du cerveau
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
-        generate_coo_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, &MatrixDebugInfo);
+        generate_csr_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, &MatrixDebugInfo);
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         nb_connections_local_tmp = MatrixDebugInfo.nb_connections;
@@ -570,7 +491,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        generate_coo_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
+        generate_csr_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
