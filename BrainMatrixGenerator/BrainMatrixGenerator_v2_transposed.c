@@ -218,6 +218,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 
 /*
 -- Nouvelle implémentation de la génération de matrice COO : --
+Ce générateur génère directement la matrice d'adjascence. Il ne reste que l'étape de normalisation par colonnes à effectuer et on peut appliquer PageRank.
 Variables :
 n = dimension de la matrice à générer
 nb_part = nombre de parties du cerveau qu'on souhaite représenter
@@ -246,7 +247,7 @@ Parcours des lignes (indice indl):
 void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
     /*
-    Génère aléatoirement la matrice creuse (*M_COO) (format COO) pour PageRank.
+    Génère aléatoirement la matrice creuse (pointeur M_COO, format COO), pour PageRank, correspondant à un cerveau passé en paramètre.
     l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
     neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
     Attention : on suppose brain.dimension = c
@@ -587,7 +588,7 @@ int main(int argc, char **argv)
 
         if (my_rank == 0)
         {
-            printf("Mémoire totale allouée : %li\nNombre de cases mémoires utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
         }
     }
 

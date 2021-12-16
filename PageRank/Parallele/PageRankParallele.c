@@ -185,46 +185,6 @@ void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, i
 --- Opérations sur les matrices ---
 ---------------------------------*/
 
-void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
-{
-    /*
-    Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
-    A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
-    L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
-    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
-    */
-    long i;
-    for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
-    {
-        (*M_CSR).Column[i] = (*M_COO).Column[i];
-        (*M_CSR).Value[i] = (*M_COO).Value[i];
-    }
-
-    int * COO_Row = (*M_COO).Row;
-    int * CSR_Row = (*M_CSR).Row;
-    long current_indl = 0;
-    *(CSR_Row + current_indl) = 0;
-    while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
-    {
-        *(CSR_Row + current_indl) = 0;
-        current_indl++;
-    }
-    for (i=0;i<(*M_COO).len_values;i++)
-    {
-        if (COO_Row[i] != current_indl)
-        {
-            *(CSR_Row + current_indl + 1) = i;
-            while (COO_Row[i] != current_indl + 1) //cas particulier : ligne de la matrice vide (<=> indice de Row qui passe d'un nombre i à un nombre j supérieur à i+1)
-            {
-                current_indl++;
-                *(CSR_Row + current_indl + 1) = i;
-            }
-            current_indl = COO_Row[i];
-        }
-    }
-    *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
-}
-
 int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 {
     /*
@@ -367,7 +327,7 @@ void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
 void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, int zero_percentage, long l, long c)
 {
     /*
-    Génère aléatoirement la matrice creuse (*M_COO) (format COO) pour PageRank.
+    Génère complètement aléatoirement (ne correspondant pas à un cerveau) la matrice creuse (*M_COO) (format COO) pour PageRank.
     l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
     ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
     Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
@@ -404,37 +364,10 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
     (*M_COO).len_values = cpt_values;
 }
 
-/*
--- Nouvelle implémentation de la génération de matrice COO : --
-Variables :
-n = dimension de la matrice à générer
-nb_part = nombre de parties du cerveau qu'on souhaite représenter
-p = nombre de coeurs alloués (= nombre de blocs de ligne)
-
-Entrée :
-1) vecteur "parties_cerveau" d'entiers de taille nb_part (contenant nb_part valeurs, croissantes, de 0 à n)
----> indique (à l'indice i) la ligne de la matrice à laquelle commence la partie d'indice i du cerveau
-Ce vecteur servira pour connaître la partie du cerveau qu'on manipule au niveau des lignes, et aussi au niveau des colonnes.
-
-2) nb_part tableaux "probaConnection" de taille nbTypeNeuron * nb_part associés avec un vecteur "repartitionNeuronCumulee" de taille nbTypeNeuron
----> repartitionNeuronCumulee contient à l'indice i la probabilité (cumulée avec les précédentes) que le neurone (dans la partie du cerveau dans laquelle il apparaît) soit effectivement un neurone de ce type.
----> probaConnection indique à la ligne d'indice i les probabilités, d'indice de colonne j (0 -> nb_part), pour que le type de neurone i se connecte à la partie d'indice j du cerveau
-Ces deux données permettront, lors de la génération d'une partie du cerveau, de choisir (pour une ligne) le type de neurone qu'elle représentera,
-puis (pour chaque colonne, avec des probas != pour chaque partie du cerveau) choisir si on met une connection ou non.
-
-Algorithme de génération :
-Parcours des lignes (indice indl):
-    On regarde dans quelle partie du cerveau on est avec "parties_cerveau" : on est à la partie d'indice indp
-    On décide de quel type de neuronne (indice indn entre 0 et nbTypeNeuron) sera la ligne avec le "repartitionNeuronCumulee" associé à la partie du cerveau d'indice indp
-    On parcours les colonnes (indice indc):
-        On regarde à quelle partie du cerveau on essaye de se connecter (indice indpco)
-        On prend une décision en fonction de la valeur du tableau "probaConnection" (ligne indn, colonne indpco)
-*/
-
 void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
     /*
-    Génère aléatoirement la matrice creuse (*M_COO) (format COO) pour PageRank.
+    Génère aléatoirement la matrice creuse (pointeur M_COO, format COO), pour PageRank, correspondant à un cerveau passé en paramètre.
     l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
     neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
     Attention : on suppose brain.dimension = c
@@ -517,26 +450,44 @@ void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_
     for (i=0; i<cpt_values;i++) {(*M_COO).Value[i] = 1;}
 }
 
-void dense_to_coo_matrix(int *M, IntCOOMatrix * M_COO)
+void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 {
     /*
-    Traduit la matrice stockée normalement dans M en matrice stockée en format COO dans M_COO.
-    Les vecteurs Row, Column et Value sont de taille "nombre d'éléments non nulles dans la matrice".
-    Les dimensions de la matrice (dim_l,dim_c) = (nombre de lignes, nombre de colonnes) doivent déjà être définis dans M_COO. Les allocations mémoires doivent aussi être fait au préalable.
+    Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
+    A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
+    L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
+    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
     */
-    long i, j, nb = 0;
-    for (i=0;i<(*M_COO).dim_l;i++)
+    long i;
+    for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
     {
-        for (j=0;j<(*M_COO).dim_c;j++)
+        (*M_CSR).Column[i] = (*M_COO).Column[i];
+        (*M_CSR).Value[i] = (*M_COO).Value[i];
+    }
+
+    int * COO_Row = (*M_COO).Row;
+    int * CSR_Row = (*M_CSR).Row;
+    long current_indl = 0;
+    *(CSR_Row + current_indl) = 0;
+    while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
+    {
+        *(CSR_Row + current_indl) = 0;
+        current_indl++;
+    }
+    for (i=0;i<(*M_COO).len_values;i++)
+    {
+        if (COO_Row[i] != current_indl)
         {
-            if (*(M + i*(*M_COO).dim_c+j) != 0)
+            *(CSR_Row + current_indl + 1) = i;
+            while (COO_Row[i] != current_indl + 1) //cas particulier : ligne de la matrice vide (<=> indice de Row qui passe d'un nombre i à un nombre j supérieur à i+1)
             {
-                (*M_COO).Row[nb] = i; (*M_COO).Column[nb] = j;
-                (*M_COO).Value[nb] = *(M+i*(*M_COO).dim_c+j);
-                nb++;
+                current_indl++;
+                *(CSR_Row + current_indl + 1) = i;
             }
+            current_indl = COO_Row[i];
         }
     }
+    *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
 }
 
 /*---------------------------------
@@ -590,16 +541,13 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
     long n;
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
+    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
-
-    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
-    if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
 
     //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
     int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
@@ -766,32 +714,17 @@ int main(int argc, char **argv)
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-    if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_LONG, list_nb_non_zeros_local, 1,  MPI_LONG, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
-    if ((debug || debug_cerveau) && my_rank == 0)
+    if (debug_cerveau)
     {
-        printf("nb_non_zeros total = %i\n",nb_non_zeros);
-        printf("Pourcentage de valeurs non nulles : 100 * %i / %i = %.2f%\n", nb_non_zeros, size, (double) 100 * (double) nb_non_zeros / (double) size);
-    }
+        total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
+        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+        MatrixDebugInfo.cpt_values = nb_non_zeros;
 
-    if (debug && my_rank == 0)
-    {
-        printf("Liste des nombres de 1 locaux :\n");
-        for(i=0;i<p;i++)
+        if (my_rank == 0)
         {
-            printf("%i ",list_nb_non_zeros_local[i]);
+            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
         }
-        printf("\n");
-    }
-
-    if (debug)
-    {
-        printf("\nVecteur A_COO.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Row[i]);}printf("\n");
-        printf("Vecteur A_COO.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Column[i]);}printf("\n");
-        printf("Vecteur A_COO.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Value[i]);}printf("\n");
     }
 
     //convertion de la matrice COO au format CSR :
@@ -803,16 +736,6 @@ int main(int argc, char **argv)
     A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
     A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
     coo_to_csr_matrix(&A_COO, &A_CSR);
-
-    if (debug)
-    {
-        printf("\nVecteur A_CSR.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_CSR.dim_l+1;i++) {printf("%i ",A_CSR.Row[i]);}printf("\n");
-        printf("Vecteur A_CSR.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_CSR.len_values;i++) {printf("%i ",A_CSR.Column[i]);}printf("\n");
-        printf("Vecteur A_CSR.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_CSR.len_values;i++) {printf("%i ",A_CSR.Value[i]);}printf("\n");
-    }
 
     //matrice normalisée format CSR :
     //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
@@ -827,7 +750,7 @@ int main(int argc, char **argv)
     //normalisation de la matrice
     normalize_matrix_on_columns(&P_CSR);
 
-    if (debug)
+    if (debug && nb_non_zeros <= 256)
     {
         printf("\nVecteur P_CSR.Row dans my_rank=%i:\n",my_rank);
         for(i=0;i<P_CSR.dim_l+1;i++) {printf("%i ",P_CSR.Row[i]);}printf("\n");
@@ -961,10 +884,6 @@ int main(int argc, char **argv)
     free(A_CSR.Row); //Column et Value sont communs avec la matrice COO
     free(P_CSR.Value); //Row et Column communs avec la matrice CSR
 
-    if (debug && my_rank == 0)
-    {
-        free(list_nb_non_zeros_local);
-    }
     if (debug_cerveau)
     {
         free(MatrixDebugInfo.nb_connections); //MatrixDebugInfo.types est free plus haut : free(neuron_types);

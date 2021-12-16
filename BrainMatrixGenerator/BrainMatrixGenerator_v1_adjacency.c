@@ -201,6 +201,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 
 /*
 -- Nouvelle implémentation de la génération de matrice COO : --
+Ce générateur génère la matrice d'adjascence A du cerveau passé en paramètre. Ce n'est pas idéal pour appliquer PageRank, car on devrait la transposer (ou adapter le produit matrice-vecteur).
 Variables :
 n = dimension de la matrice à générer
 nb_part = nombre de parties du cerveau qu'on souhaite représenter
