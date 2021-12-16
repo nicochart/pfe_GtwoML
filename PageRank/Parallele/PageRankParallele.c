@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include <sys/time.h>
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
@@ -526,6 +526,17 @@ void copy_vector_value(double *vect1, double *vect2, int size)
     for (int i=0;i<size;i++) {vect2[i] = vect1[i];}
 }
 
+/*---------------------
+--- Mesure de temps ---
+---------------------*/
+
+double my_gettimeofday()
+{
+    struct timeval tmp_time;
+    gettimeofday(&tmp_time, NULL);
+    return tmp_time.tv_sec + (tmp_time.tv_usec * 1.0e-6L);
+}
+
 /*----------
 --- Main ---
 ----------*/
@@ -548,6 +559,8 @@ int main(int argc, char **argv)
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
+
+    double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
 
     //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
     int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
@@ -683,6 +696,7 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
+    start_brain_generation_time = my_gettimeofday(); //début de la mesure de temps de génération de la matrice A transposée
 
     //génération des sous-matrices au format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
@@ -711,6 +725,9 @@ int main(int argc, char **argv)
     {
         generate_coo_brain_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 
     nb_non_zeros_local = A_COO.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
@@ -777,6 +794,9 @@ int main(int argc, char **argv)
     old_q = (double *)malloc(n * sizeof(double));
     for (i=0;i<n;i++) {new_q[i] = (double) 1/n;}
 
+    MPI_Barrier(MPI_COMM_WORLD);
+    start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
+
     while (error_vect > epsilon && !one_in_vector(new_q,n) && cpt_iterations<maxIter)
     {
         //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
@@ -820,6 +840,10 @@ int main(int argc, char **argv)
         error_vect = abs_two_vector_error(new_q,old_q,n);
     }
     //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
+    total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
     if (debug_cerveau)
     {
@@ -873,9 +897,24 @@ int main(int argc, char **argv)
 
     if (my_rank == 0)
     {
-        printf("\nRésultat ");
-        for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
-        printf("obtenu en %i itérations\n",cpt_iterations);
+        if (debug || debug_cerveau || n <= 64)
+        {
+            printf("\nRésultat ");
+            for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
+            printf("obtenu en %i itérations\n",cpt_iterations);
+        }
+        else
+        {
+            printf("Résultat %.4f %.4f ... %.4f obtenu en %i itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
+        }
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0)
+    {
+        printf("Temps écoulé lors de la génération : %.1f s\n", total_brain_generation_time);
+        printf("Temps écoulé lors de l'application de PageRank : %.1f s\n", total_pagerank_time);
+        printf("Temps total écoulé : %.1f s\n", total_time);
     }
 
     free(new_q); free(old_q);
