@@ -46,7 +46,23 @@ def probaConnection(data):
     return probaConnect
 
 data = loadData("configCortex.json")
+out = ""
+nnc = numberNeuronCumul(data)
+for i in range(len(nnc)):
+    out += str(nnc[i])+" "
+out+= "-1 "
+dnc = distribNeuronCumul(data)
+for i in range(len(dnc)):
+    out += str(dnc[i]) + " "
+out += "-1 "
+pc = probaConnection(data)
+for i in range(len(pc)):
+    out += str(pc[i]) + " "
+
+
+"""
 out = "neuronByPart = "+str(numberNeuronCumul(data))+"\n"
 out += "neuronType = "+str(distribNeuronCumul(data))+"\n"
 out += "probaConnection = "+str(probaConnection(data))+"\n"
+"""
 writeData(out)
