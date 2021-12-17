@@ -12,6 +12,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+#include <omp.h>
 
 #define NULL ((void *)0)
 
@@ -250,6 +251,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
     {
         //récupération de l'indice de la partie (du cerveau) destination
         ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
+        #pragma omp ordered
         for (j=0;j<c;j++) //parcours des colonnes
         {
             //récupération de l'indice de la partie source
