@@ -1,5 +1,10 @@
-/*Travail sur PageRank non pondéré parallele*/
+/* Générateur de matrice pour le PageRank correspondant au cerveau. */
 /*Nicolas HOCHART*/
+
+/*
+ Ce générateur génère directement la matrice AT (matrice d'adjacence A transposée)
+ La matrice est directement générée en CSR
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,23 +12,13 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+#include <omp.h>
 
 #define NULL ((void *)0)
 
 /*-------------------------------------------------------------------
 --- Structures pour le stockage des matrices au format COO et CSR ---
 -------------------------------------------------------------------*/
-
-struct IntCOOMatrix
-{
-     int * Row; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     long dim_l; //nombre de lignes
-     long dim_c; //nombre de colonnes
-     long len_values; //taille des vecteurs Row, Column et Value
-};
-typedef struct IntCOOMatrix IntCOOMatrix;
 
 struct IntCSRMatrix
 {
@@ -68,7 +63,7 @@ struct Brain
 };
 typedef struct Brain Brain;
 
-//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_coo_brain_matrix_for_pagerank"
+//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
@@ -207,122 +202,9 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
     return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
 }
 
-double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Renvoie la valeur [indl,indc] de la matrice M_CSR stockée au format CSR.
-    Le vecteur à l'adresse (*M_CSR).Value doit être un vecteur de doubles.
-    */
-    int *Row,*Column; double *Value;
-    Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
-    if (indl >= (*M_CSR).dim_l || indc >= (*M_CSR).dim_c)
-    {
-        perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
-        return -1;
-    }
-    long i;
-    long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
-    for (i=Row[indl];i<Row[indl]+nb_values;i++)
-    {
-        if (Column[i] == indc) {return Value[i];}
-    }
-    return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
-}
-
-long cpt_nb_zeros_matrix(int *M, long long size)
-{
-    /*Compte le nombre de 0 dans la matrice M stockée comme un vecteur d'entiers à size elements*/
-    long compteur = 0;
-    for (int d=0;d<size;d++)
-    {
-        if (*(M+d) == 0) {compteur++;}
-    }
-    return compteur;
-}
-
-void matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Ecrit dans sum_vector (vecteur de taille (*M_CSR).dim_c) la somme des éléments colonne par colonne de la matrice à l'adresse M_CSR.
-    Chaque case d'indice i du sum_vector contiendra la somme des éléments de la colonne du même indice i.
-    L'allocation mémoire du vecteur sum_vector doit être faite au préalable.
-    */
-    int i;
-    for (i=0;i<(*M_CSR).dim_c;i++) //initialisation du vecteur sum_vector
-    {
-        *(sum_vector+i) = 0;
-    }
-
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
-    {
-        *(sum_vector + (*M_CSR).Column[i]) += (*M_CSR).Value[i];
-    }
-}
-
-void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Normalise la matrice CSR M_CSR sur les colonnes.
-    */
-    long i;
-    int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
-    matrix_column_sum_vector(sum_vector, M_CSR);
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
-    {
-        (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
-    }
-    free(sum_vector);
-}
-
-void matrix_vector_product(double *y, double *A, double *x, int n)
-{
-    int i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice n*n, y et x doivent être de longueur n*/
-    for (i=0;i<n;i++)
-    {
-        y[i] = 0;
-        for (j=0;j<n;j++)
-        {
-            y[i] += A[i*n+j] * x[j];
-        }
-    }
-}
-
-void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
-{
-    long i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice stockée au format CSR, x et y doivent être de talle (*A).dim_c*/
-    long nb_ligne = (*A).dim_l;
-    long nb_col = (*A).dim_c;
-    for (i=0;i<nb_ligne;i++)
-    {
-        y[i] = 0;
-        for (j=(*A).Row[i]; j<(*A).Row[i+1]; j++) //for (j=0;j<nb_col;j++)  y[i] += A[i*nb_col+j] * x[j]
-        {
-            y[i] += (*A).Value[j] * x[(*A).Column[j]];
-        }
-    }
-}
-
 /*--------------------------------------------------------------------------------
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
-
-void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
-{
-    /*
-    Rempli n éléments de la ligne i de la matrice M stockée comme un vecteur d'entiers.
-    Il y a zero_percentage % de chances que le nombre soit 0.
-    Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
-    */
-    long j;
-
-    for (j=0;j<n;j++)
-    {
-        if (random_between_0_and_1() < zero_percentage/100.0) {*(M + i*n+j) = 0;} //zero_percentage % de chances de mettre un 0
-        else {*(M + i*n+j) = 1;}
-    }
-}
 
 void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
@@ -369,6 +251,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
     {
         //récupération de l'indice de la partie (du cerveau) destination
         ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
+        #pragma omp ordered
         for (j=0;j<c;j++) //parcours des colonnes
         {
             //récupération de l'indice de la partie source
@@ -410,168 +293,6 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
     for (i=0; i<cpt_values;i++) {(*M_CSR).Value[i] = 1;}
 }
 
-void generate_coo_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
-{
-    /*
-    Génère aléatoirement la matrice creuse (pointeur M_COO, format COO), pour PageRank, correspondant à un cerveau passé en paramètre.
-    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
-    neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
-    Attention : on suppose brain.dimension = c
-    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
-    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
-    Le pourcentage de valeurs (1 ou 0) dans la matrice est choisi en fonction du cerveau "brain" passé en paramètre.
-
-    debugInfo est un pointeur vers une structure de débuggage.
-    Si ce paramètre est à NULL, aucune information de débuggage n'est écrite.
-    Si on écrit des informations de débuggage, deux malloc de plus sont fait.
-
-    Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
-    */
-    long i,j,cpt_values,size=l*c;
-    int ind_part_source,ind_part_dest,source_type; double proba_connection,proba_no_connection,random;
-    (*M_COO).dim_l = l; (*M_COO).dim_c = c;
-    if (debugInfo != NULL)
-    {
-        (*debugInfo).dim_l = l; (*debugInfo).dim_c = c;
-        (*debugInfo).types = neuron_types;
-        //Attention : ces malloc ne sont pas "free" dans la fonction !
-        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
-        for (i=0;i<(*debugInfo).dim_c;i++)
-        {
-            (*debugInfo).nb_connections[i] = 0;
-        }
-    }
-
-    //La mémoire allouée est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
-    long basic_size = (long) size/10;
-    long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
-    (*M_COO).Row = (int *)malloc(total_memory_allocated * sizeof(int));
-    (*M_COO).Column = (int *)malloc(total_memory_allocated * sizeof(int));
-
-    cpt_values=0;
-    for (i=0;i<l;i++) //parcours des lignes
-    {
-        //récupération de l'indice de la partie (du cerveau) destination
-        ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
-        for (j=0;j<c;j++) //parcours des colonnes
-        {
-            //récupération de l'indice de la partie source
-            ind_part_source = get_brain_part_ind(j, brain);
-            //récupération du type de neurone
-            source_type = neuron_types[j];
-            //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
-            proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
-            proba_no_connection = 1 - proba_connection;
-            random = random_between_0_and_1();
-            //décision aléatoire, en prenant en compte l'abscence de connexion sur la diagonale de façon brute
-            if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
-            {
-                if (cpt_values >= total_memory_allocated)
-                {
-                    total_memory_allocated *= 2;
-                    (*M_COO).Row = (int *) realloc((*M_COO).Row, total_memory_allocated * sizeof(int));
-                    (*M_COO).Column = (int *) realloc((*M_COO).Column, total_memory_allocated * sizeof(int));
-                    assert((*M_COO).Row != NULL);
-                    assert((*M_COO).Column != NULL);
-                }
-                (*M_COO).Row[cpt_values] = i;
-                (*M_COO).Column[cpt_values] = j;
-                if (debugInfo != NULL)
-                {
-                    (*debugInfo).nb_connections[j] = (*debugInfo).nb_connections[j] + 1;
-                }
-                cpt_values++;
-            }
-        }
-    }
-    //remplissage de la structure de débuggage
-    if (debugInfo != NULL)
-    {
-        (*debugInfo).total_memory_allocated = total_memory_allocated;
-        (*debugInfo).cpt_values = cpt_values;
-    }
-    //remplissage du vecteur Value (avec précisement le nombre de 1 nécéssaire)
-    (*M_COO).Value = (int *)malloc(cpt_values * sizeof(int));
-    (*M_COO).len_values = cpt_values;
-    for (i=0; i<cpt_values;i++) {(*M_COO).Value[i] = 1;}
-}
-
-void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
-{
-    /*
-    Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
-    A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
-    L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
-    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
-    */
-    long i;
-    for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
-    {
-        (*M_CSR).Column[i] = (*M_COO).Column[i];
-        (*M_CSR).Value[i] = (*M_COO).Value[i];
-    }
-
-    int * COO_Row = (*M_COO).Row;
-    int * CSR_Row = (*M_CSR).Row;
-    long current_indl = 0;
-    *(CSR_Row + current_indl) = 0;
-    while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
-    {
-        *(CSR_Row + current_indl) = 0;
-        current_indl++;
-    }
-    for (i=0;i<(*M_COO).len_values;i++)
-    {
-        if (COO_Row[i] != current_indl)
-        {
-            *(CSR_Row + current_indl + 1) = i;
-            while (COO_Row[i] != current_indl + 1) //cas particulier : ligne de la matrice vide (<=> indice de Row qui passe d'un nombre i à un nombre j supérieur à i+1)
-            {
-                current_indl++;
-                *(CSR_Row + current_indl + 1) = i;
-            }
-            current_indl = COO_Row[i];
-        }
-    }
-    *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
-}
-
-/*---------------------------------
---- Opérations sur les vecteurs ---
----------------------------------*/
-
-int one_in_vector(double *vect, int size)
-{
-    //retourne 1 s'il y a un "1" dans le vecteur (permet de tester un cas particulier du PageRank lorsque beta = 1)
-    for (int i=0;i<size;i++)
-    {
-        if (vect[i] == 1.0) {return 1;}
-    }
-    return 0;
-}
-
-double vector_norm(double *vect, int size)
-{
-    /* somme les éléments du vecteur de doubles à l'adresse vect de taille size, et renvoie le résultat */
-    double sum=0;
-    for (int i=0;i<size;i++) {sum+=vect[i];}
-    return sum;
-}
-
-double abs_two_vector_error(double *vect1, double *vect2, int size)
-{
-    /*Calcul l'erreur entre deux vecteurs de taille "size"*/
-    double sum=0;
-    for (int i=0;i<size;i++) {sum += fabs(vect1[i] - vect2[i]);}
-    return sum;
-}
-
-void copy_vector_value(double *vect1, double *vect2, int size)
-{
-    /*Copie les valeurs du vecteur 1 dans le vecteur 2. Les deux vecteurs doivent être de taille "size".*/
-    for (int i=0;i<size;i++) {vect2[i] = vect1[i];}
-}
-
 /*---------------------
 --- Mesure de temps ---
 ---------------------*/
@@ -597,16 +318,19 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=0; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug=1; //passer à 1 pour afficher les print de débuggage
+    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
     long n;
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
+    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
 
-    double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
+    double start_time, total_time;
+
+    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
+    if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
 
     //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
     int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
@@ -648,14 +372,14 @@ int main(int argc, char **argv)
     //partie 1
     nbTypeNeuronIci = 2;
     double repNCumulee1[2] = {0.5, 1};
-    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.3, 0.5, 0.4, 0.6, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
     brainPart[0].nbTypeNeuron = nbTypeNeuronIci;
     brainPart[0].repartitionNeuronCumulee = repNCumulee1;
     brainPart[0].probaConnection = probCo1;
     //partie 2
     nbTypeNeuronIci = 1;
     double repNCumulee2[1] = {1};
-    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4};
+    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.3, 0.5, 0.4};
     brainPart[1].nbTypeNeuron = nbTypeNeuronIci;
     brainPart[1].repartitionNeuronCumulee = repNCumulee2;
     brainPart[1].probaConnection = probCo2;
@@ -742,7 +466,7 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    start_brain_generation_time = my_gettimeofday(); //début de la mesure de temps de génération de la matrice A transposée
+    start_time = my_gettimeofday();
 
     //génération des sous-matrices au format CSR :
     //3 ALLOCATIONS : allocation de mémoire pour CSR_Row, CSR_Column et CSR_Value dans la fonction generate_csr_matrix_for_pagerank()
@@ -773,10 +497,11 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
+    total_time = my_gettimeofday() - start_time;
 
     nb_non_zeros_local = A_CSR.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    if (debug) {MPI_Allgather(&nb_non_zeros_local, 1, MPI_LONG, list_nb_non_zeros_local, 1,  MPI_LONG, MPI_COMM_WORLD);} //réunion dans chaque processus de tout les nombres de zéros de chaque bloc
 
     if (debug_cerveau)
     {
@@ -786,100 +511,29 @@ int main(int argc, char **argv)
 
         if (my_rank == 0)
         {
-            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+            printf("Mémoire totale allouée pour le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
         }
     }
 
-    //matrice normalisée format CSR :
-    //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
-    struct DoubleCSRMatrix P_CSR;
-    P_CSR.len_values = nb_non_zeros_local; //nombre de zéro local
-    P_CSR.dim_l = A_CSR.dim_l;
-    P_CSR.dim_c = A_CSR.dim_c;
-    P_CSR.Value = (double *)malloc(nb_non_zeros_local * sizeof(double));
-    P_CSR.Column = A_CSR.Column; P_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
-    //copie du vecteur Value dans NormValue
-    for(i=0;i<nb_non_zeros_local;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
-    //normalisation de la matrice
-    normalize_matrix_on_columns(&P_CSR);
+    if (debug && my_rank == 0)
+    {
+        printf("Liste des nombres de 1 locaux :\n");
+        for(i=0;i<p;i++)
+        {
+            printf("%i ",list_nb_non_zeros_local[i]);
+        }
+        printf("\n");
+    }
 
     if (debug && nb_non_zeros <= 256)
     {
-        printf("\nVecteur P_CSR.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.dim_l+1;i++) {printf("%i ",P_CSR.Row[i]);}printf("\n");
-        printf("Vecteur P_CSR.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.len_values;i++) {printf("%i ",P_CSR.Column[i]);}printf("\n");
-        printf("Vecteur P_CSR.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.len_values;i++) {printf("%.2f ",P_CSR.Value[i]);}printf("\n");
+        printf("\nVecteur A_CSR.Row dans my_rank=%i:\n",my_rank);
+        for(i=0;i<A_CSR.dim_l+1;i++) {printf("%i ",A_CSR.Row[i]);}printf("\n");
+        printf("Vecteur A_CSR.Column dans my_rank=%i:\n",my_rank);
+        for(i=0;i<A_CSR.len_values;i++) {printf("%i ",A_CSR.Column[i]);}printf("\n");
+        printf("Vecteur A_CSR.Value dans my_rank=%i:\n",my_rank);
+        for(i=0;i<A_CSR.len_values;i++) {printf("%i ",A_CSR.Value[i]);}printf("\n");
     }
-
-    //Page Rank
-    double error_vect,beta;
-    double *new_q,*old_q,*tmp;
-    long cpt_iterations = 0;
-    int maxIter = 100000;
-    double epsilon = 0.00000000001;
-
-    //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc,morceau_new_q[nb_ligne];
-
-    //init variables PageRank
-    beta = 1; error_vect=INFINITY;
-    //allocation mémoire pour old_q et new_q, et initialisation de new_q
-    new_q = (double *)malloc(n * sizeof(double));
-    old_q = (double *)malloc(n * sizeof(double));
-    for (i=0;i<n;i++) {new_q[i] = (double) 1/n;}
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
-
-    while (error_vect > epsilon && !one_in_vector(new_q,n) && cpt_iterations<maxIter)
-    {
-        //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
-        tmp = new_q;
-        new_q = old_q;
-        old_q = tmp;
-        tmp_sum = sum_totale_new_q;
-        sum_totale_new_q = sum_totale_old_q;
-        sum_totale_old_q = tmp_sum;
-        //-- itération sur new_q --
-
-        // calcul du produit matrice-vecteur new_q= P * old_q et de la somme des carrés total
-        sum_new_q = 0;
-        for(i=0; i<nb_ligne; i++)
-        {
-            sc = 0; //scalaire
-            for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
-            {
-                sc += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
-            }
-            //étape 1 : new_q = beta * P.old_q
-            morceau_new_q[i] = beta * sc; //new_q[i] = beta * ligneP[i] * old_q
-            //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
-            to_add = sum_totale_old_q * (1-beta)/n; //sum_total_old_q contient déjà la somme des éléments de old_q
-            morceau_new_q[i] = morceau_new_q[i] + to_add;
-            sum_new_q  += sc;
-        }
-        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
-
-        MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD); //récupération des morceaux de new_q dans new_q, dans tout les processus
-        //étape 3 : normalisation de q
-        for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
-
-        //-- fin itération--
-        if (debug && my_rank==0)
-        {
-            printf("--------------- itération %i :\n",cpt_iterations);
-            printf("old_q :"); for(i=0;i<n;i++) {printf("%.2f ",old_q[i]);}printf("\nnew_q : "); for(i=0;i<n;i++) {printf("%.2f ",new_q[i]);} printf("\n");
-        }
-        cpt_iterations++;
-        error_vect = abs_two_vector_error(new_q,old_q,n);
-    }
-    //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
-    total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
     if (debug_cerveau)
     {
@@ -930,37 +584,18 @@ int main(int argc, char **argv)
         }
     }
     MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0) {printf("Temps écoulé lors de la génération : %.1f s\n", total_time);}
 
-    if (my_rank == 0)
-    {
-        if (debug || debug_cerveau || n <= 64)
-        {
-            printf("\nRésultat ");
-            for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
-            printf("obtenu en %i itérations\n",cpt_iterations);
-        }
-        else
-        {
-            printf("Résultat %.4f %.4f ... %.4f obtenu en %i itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
-        }
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    if (my_rank == 0)
-    {
-        printf("Temps écoulé lors de la génération : %.1f s\n", total_brain_generation_time);
-        printf("Temps écoulé lors de l'application de PageRank : %.1f s\n", total_pagerank_time);
-        printf("Temps total écoulé : %.1f s\n", total_time);
-    }
-
-    free(new_q); free(old_q);
     free(local_types); free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
-    free(P_CSR.Value); //Row et Column communs avec la matrice CSR
 
+    if (debug && my_rank == 0)
+    {
+        free(list_nb_non_zeros_local);
+    }
     if (debug_cerveau)
     {
-        free(MatrixDebugInfo.nb_connections); //MatrixDebugInfo.types est free plus haut : free(neuron_types);
+        free(MatrixDebugInfo.nb_connections);
         free(nb_connections_local_tmp);
     }
     MPI_Finalize();
