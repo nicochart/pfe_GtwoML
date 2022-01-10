@@ -5,6 +5,23 @@
 #include <mpi.h>
 #include <math.h>
 
+/*-----------------------------------------------------------
+--- Structures pour les blocks (sur les différents cores) ---
+-----------------------------------------------------------*/
+
+struct MatrixBlock
+{
+     int indl; //Indice de ligne du block
+     int indc; //Indice de colonne du block
+     long dim_l; //nombre de lignes dans le block
+     long dim_c; //nombre de colonnes dans le block
+     long startRow; //Indice de départ en ligne (inclu)
+     long startColumn; //Indice de départ en colonne (inclu)
+     long endRow; //Indice de fin en ligne (inclu)
+     long endColumn; //Indice de fin en colonne (inclu)
+};
+typedef struct MatrixBlock MatrixBlock;
+
 /*----------
 --- Main ---
 ----------*/
@@ -59,13 +76,22 @@ int main(int argc, char **argv)
 
     my_indl = my_rank / nb_blocks_column;
     my_indc = my_rank % nb_blocks_column;
+    struct MatrixBlock myBlock;
+    myBlock.indl = my_indl;
+    myBlock.indc = my_indc;
+    myBlock.dim_l = nb_ligne;
+    myBlock.dim_c = nb_colonne;
+    myBlock.startRow = my_indl*nb_ligne;
+    myBlock.endRow = (my_indl+1)*nb_ligne-1;
+    myBlock.startColumn = my_indc*nb_colonne;
+    myBlock.endColumn = (my_indc+1)*nb_colonne-1;
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0)
     {
         printf("----------------------\nBilan de votre matrice :\n");
         printf("Taille : %li * %li = %li\n",n,n,size);
-        printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
+        printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,myBlock.dim_l,nb_blocks_column,myBlock.dim_c);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -74,7 +100,7 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == k)
         {
-            printf("Indices de ligne et colonne du bloc my_rank=%i : [%i,%i], indices (de la matrice n*n) contenus dans ce bloc : [%li,%li] jusque [%li,%li]\n",my_rank,my_indl,my_indc,my_indl*nb_ligne,my_indc*nb_colonne,(my_indl+1)*nb_ligne-1,(my_indc+1)*nb_colonne-1);
+            printf("Indices de ligne et colonne du bloc my_rank=%i : [%i,%i], indices (de la matrice n*n) contenus dans ce bloc : [%li,%li] jusque [%li,%li]\n",my_rank,my_indl,my_indc,myBlock.startRow,myBlock.startColumn,myBlock.endRow,myBlock.endColumn);
         }
     }
 
