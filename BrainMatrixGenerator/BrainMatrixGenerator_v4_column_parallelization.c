@@ -47,6 +47,23 @@ struct DoubleCSRMatrix
 };
 typedef struct DoubleCSRMatrix DoubleCSRMatrix;
 
+/*-----------------------------------------------------------
+--- Structures pour les blocks (sur les différents cores) ---
+-----------------------------------------------------------*/
+
+struct MatrixBlock
+{
+     int indl; //Indice de ligne du block
+     int indc; //Indice de colonne du block
+     long dim_l; //nombre de lignes dans le block
+     long dim_c; //nombre de colonnes dans le block
+     long startRow; //Indice de départ en ligne (inclu)
+     long startColumn; //Indice de départ en colonne (inclu)
+     long endRow; //Indice de fin en ligne (inclu)
+     long endColumn; //Indice de fin en colonne (inclu)
+};
+typedef struct MatrixBlock MatrixBlock;
+
 /*----------------------------------------------------------------------
 --- Structure contenant les informations d'un cerveau et ses parties ---
 ----------------------------------------------------------------------*/
@@ -251,7 +268,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
 
-void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, int zero_percentage, long l, long c)
+void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo, int zero_percentage, long l, long c)
 {
     /*
     Génère complètement aléatoirement (ne correspondant pas à un cerveau) la matrice creuse (*M_COO) (format COO) pour PageRank.
@@ -262,7 +279,7 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
     Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
     (Ce n'est pas exact, car un test est effectué avec ind_start_row pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
     */
-    long i,j,cpt_values,size=l*c;
+    long i = 0, j = 0, cpt_values, size = BlockInfo.dim_l * BlockInfo.dim_c;
     long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
     (*M_COO).dim_l = l; (*M_COO).dim_c = c;
     //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
@@ -272,11 +289,12 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
     (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
 
     cpt_values=0;
-    for (i=0;i<l;i++) //parcours des lignes
+    while (i <= BlockInfo.dim_l) //parcours des lignes
     {
-        for (j=0;j<c;j++) //parcours des colonnes
+        j = 0;
+        while (j <= BlockInfo.dim_c) //parcours des colonnes
         {
-            if ( (ind_start_row+i)!=j && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
+            if ( (BlockInfo.startRow + i != BlockInfo.startColumn + j) && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
             {
                 if (cpt_values < mean_nb_non_zeros)
                 {
@@ -286,7 +304,9 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, i
                     cpt_values++;
                 }
             }
+            j++;
         }
+        i++;
     }
     (*M_COO).len_values = cpt_values;
 }
@@ -402,22 +422,25 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
+    if ((double) sqrt(p) != (int) sqrt(p))
+    {
+        if (my_rank == 0) {printf("Erreur : le nombre de coeurs disponible (%i) n'a pas de racine entière..\nOn doit pouvoir le passer à la racine et obtenir un nombre entier pour pouvoir diviser en ligne et colonnes.\n",p);}
+        exit(1);
+    }
+
     int debug=1; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
     long n;
+    int q = sqrt(p);
+    int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
+    int my_indl, my_indc; //indice de ligne et colonne du bloc
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local,*list_nb_non_zeros_local;
+    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types, *local_types;
 
     double start_time, total_time;
-
-    //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
-    if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
-
-    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
-    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
 
     if (argc < 2)
     {
@@ -425,23 +448,43 @@ int main(int argc, char **argv)
         exit(1);
     }
     n = atoll(argv[1]);
-    if (argc > 2)
+    if (argc < 4)
     {
-        for (i=2;i<argc && i<p+2;i++)
+        if (my_rank == 0) {printf("Si vous voulez saisir le nombre de blocs (parallèles), veuillez les préciser dans les deux dimensions : %s n l c\nValeur prise par défaut : sqrt(%i) = %i\n", argv[0], p, q);}
+    }
+    else if (argc >= 4) //dans le cas où on a des paramètres correspondant au nombre de blocs dans les dimensions
+    {
+        nb_blocks_row = atoll(argv[2]);
+        nb_blocks_column = atoll(argv[3]);
+        if (nb_blocks_row * nb_blocks_column != p)
         {
-            *(zeros_percentages+i-2) = 100 - atoll(argv[i]);
+            if (my_rank == 0) {printf("Erreur : %i * %i != %i. Usage : %s n nb_blocks_row nb_blocks_column (les nombres de blocs par ligne/colonne multipliés doit être égale à %i, le nombre de coeurs alloués)\n", nb_blocks_row, nb_blocks_column, p, argv[0], p);}
+            exit(1);
         }
     }
 
-    if (debug && my_rank == 0)
-    {
-        printf("Liste des pourcentages de 0 dans chaque bloc :\n");
-        for (i=0;i<p;i++) {printf("%i ",zeros_percentages[i]);}
-        printf("\n");
-    }
+    size = n * n; //taille de la matrice
+    long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
 
-    size = n * n;
-    long nb_ligne = n/p; //nombre de lignes par bloc
+    my_indl = my_rank / nb_blocks_column;
+    my_indc = my_rank % nb_blocks_column;
+    struct MatrixBlock myBlock;
+    myBlock.indl = my_indl;
+    myBlock.indc = my_indc;
+    myBlock.dim_l = nb_ligne;
+    myBlock.dim_c = nb_colonne;
+    myBlock.startRow = my_indl*nb_ligne;
+    myBlock.endRow = (my_indl+1)*nb_ligne-1;
+    myBlock.startColumn = my_indc*nb_colonne;
+    myBlock.endColumn = (my_indc+1)*nb_colonne-1;
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0)
+    {
+        printf("----------------------\nBilan de votre matrice :\n");
+        printf("Taille : %li * %li = %li\n",n,n,size);
+        printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank==0) {printf("Debut génération matrice\n");}
@@ -451,9 +494,10 @@ int main(int argc, char **argv)
     //matrice format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
     struct IntCOOMatrix A_COO;
-    generate_coo_matrix_for_pagerank(&A_COO, my_rank*nb_ligne, zeros_percentages[my_rank], nb_ligne, n);
+    generate_coo_matrix_for_pagerank(&A_COO, myBlock, 50, nb_ligne, n);
 
     nb_non_zeros_local = A_COO.len_values;
+    printf("Nombre de non zero local : %i\n",nb_non_zeros_local);//DEL
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
 
     if (debug)
@@ -465,6 +509,7 @@ int main(int argc, char **argv)
         printf("Vecteur A_COO.Value dans my_rank=%i:\n",my_rank);
         for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Value[i]);}printf("\n");
     }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     //convertion de la matrice COO au format CSR :
     //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
@@ -489,18 +534,19 @@ int main(int argc, char **argv)
     if (debug_cerveau)
     {
         MPI_Barrier(MPI_COMM_WORLD);
-        if (my_rank == 0) {printf("Matrice A :\n");}
+        if (my_rank == 0) {printf("-------- Matrices:\n");}
         MPI_Barrier(MPI_COMM_WORLD);
         for (k=0;k<p;k++)
         {
             MPI_Barrier(MPI_COMM_WORLD);
             if (my_rank == k)
             {
-                for (i=0;i<nb_ligne;i++)
+                printf("Matrices du processus %i :\n",my_rank);
+                for (i=0;i<myBlock.dim_l;i++)
                 {
                     if (n<=32) //si la dimension de la matrice est inférieur ou égale à 32, on peut l'afficher
                     {
-                        for (j=0;j<n;j++)
+                        for (j=0;j<myBlock.dim_c;j++)
                         {
                             printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
                         }
