@@ -591,9 +591,57 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+    //Génération de la matrice CSR à partir du cerveau
+    struct DebugBrainMatrixInfo MatrixDebugInfo;
+    if (debug_cerveau)
+    {
+        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+
+        /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
+        nb_connections_local_tmp = (long *)malloc(n * sizeof(long));
+        for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
+        for (i=myBlock.startColumn;i<=myBlock.endColumn;i++)
+        {
+            nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startColumn];
+        }
+        nb_connections_tmp = (long *)malloc(n * sizeof(long));
+        /*DEL*/for (k=0;k<p;k++){MPI_Barrier(MPI_COMM_WORLD); if (my_rank == k){
+        /*DEL*/printf("vecteur nb_connections_local_tmp dans processus %i :\n",my_rank);
+        /*DEL*/for (i=0;i<n;i++)
+        /*DEL*/{
+        /*DEL*/    printf("%li ",nb_connections_local_tmp[i]);
+        /*DEL*/} printf("\n");}}
+        MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+        /*DEL*/if (my_rank == 0){printf("Vecteur nb_connections_tmp :\n");
+        /*DEL*/for (i=0;i<n;i++)
+        /*DEL*/{
+        /*DEL*/    printf("%li ",nb_connections_tmp[i]);
+        /*DEL*/} printf("\n");}
+        free(nb_connections_local_tmp);
+        MatrixDebugInfo.nb_connections = nb_connections_tmp;
+        /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
+    }
+    else
+    {
+        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+    }
 
     total_time = my_gettimeofday() - start_time;
+
+    nb_non_zeros_local = A_CSR.len_values;
+    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+
+    if (debug_cerveau)
+    {
+        total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
+        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+        MatrixDebugInfo.cpt_values = nb_non_zeros;
+
+        if (my_rank == 0)
+        {
+            printf("Mémoire totale allouée pour le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+        }
+    }
 
     if (debug)
     {
@@ -627,10 +675,36 @@ int main(int argc, char **argv)
                         printf("\n");
                     }
                 }
+                if (n>32)
+                {
+                    printf("trop grande pour être affichée\n");
+                }
             }
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    int partie, type;
+    long nbco;
+    double pourcentage_espere, sum_pourcentage_espere;
+    for(i=0;i<n;i++) // Parcours des neurones
+    {
+        partie = get_brain_part_ind(i, &Cerveau);
+        type = neuron_types[i];
+        pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
+        nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
+        if (my_rank == 0)
+        {
+            printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
+        }
+        sum_pourcentage_espere += pourcentage_espere;
+    }
+    if (my_rank==0)
+    {
+        printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
+    }
+
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {printf("Temps écoulé lors de la génération : %.1f s\n", total_time);}
 
