@@ -312,16 +312,14 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo
     (*M_COO).len_values = cpt_values;
 }
 
-void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
+void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
     /*
     Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
-    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    Les nombres de ligne et nombre de colonnes de la matrice sont passés en paramètre dans BlockInfo.dim_l et BlockInfo.dim_c, ils seront stockés dans dim_l et dim_c
     neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
-    Attention : on suppose brain.dimension = c
-    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
-    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
-    Le pourcentage de valeurs (1 ou 0) dans la matrice est choisi en fonction du cerveau "brain" passé en paramètre.
+    Attention : on suppose brain.dimension > BlockInfo.dim_c
+    (Le pourcentage de 0 global n'est pas tout à fait respécté, car un test est effectué avec BlockInfo.startRow et BlockInfo.startColumn pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
 
     debugInfo est un pointeur vers une structure de débuggage.
     Si ce paramètre est à NULL, aucune information de débuggage n'est écrite.
@@ -329,12 +327,12 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
 
     Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
     */
-    long i,j,cpt_values,size=l*c;
+    long i,j,cpt_values,size = BlockInfo.dim_l * BlockInfo.dim_c;
     int ind_part_source,ind_part_dest,source_type; double proba_connection,proba_no_connection,random;
-    (*M_CSR).dim_l = l; (*M_CSR).dim_c = c;
+    (*M_CSR).dim_l = BlockInfo.dim_l; (*M_CSR).dim_c = BlockInfo.dim_c;
     if (debugInfo != NULL)
     {
-        (*debugInfo).dim_l = l; (*debugInfo).dim_c = c;
+        (*debugInfo).dim_l = BlockInfo.dim_l; (*debugInfo).dim_c = BlockInfo.dim_c;
         (*debugInfo).types = neuron_types;
         //Attention : ces malloc ne sont pas "free" dans la fonction !
         (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
@@ -353,14 +351,14 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
 
     (*M_CSR).Row[0] = 0;
     cpt_values=0;
-    for (i=0;i<l;i++) //parcours des lignes
+    for (i=0;i<BlockInfo.dim_l;i++) //parcours des lignes
     {
         //récupération de l'indice de la partie (du cerveau) destination
-        ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
-        for (j=0;j<c;j++) //parcours des colonnes
+        ind_part_dest = get_brain_part_ind(BlockInfo.startRow+i, brain);
+        for (j=0;j<BlockInfo.dim_c;j++) //parcours des colonnes
         {
             //récupération de l'indice de la partie source
-            ind_part_source = get_brain_part_ind(j, brain);
+            ind_part_source = get_brain_part_ind(BlockInfo.startColumn+j, brain);
             //récupération du type de neurone
             source_type = neuron_types[j];
             //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
@@ -368,7 +366,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_
             proba_no_connection = 1 - proba_connection;
             random = random_between_0_and_1();
             //décision aléatoire, en prenant en compte l'abscence de connexion sur la diagonale de façon brute
-            if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
+            if ( (BlockInfo.startRow+i)!=(BlockInfo.startColumn+j) && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
             {
                 if (cpt_values >= total_memory_allocated)
                 {
@@ -429,7 +427,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    int debug=1; //passer à 1 pour afficher les print de débuggage
+    int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
     long n;
@@ -487,40 +485,115 @@ int main(int argc, char **argv)
         printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
     }
 
+    //Cerveau écrit en brute (pour essayer)
+    int nbTypeNeuronIci,nb_part=8;
+    BrainPart brainPart[nb_part];
+    long part_cerv[nb_part];
+    long nb_neurone_par_partie = n / nb_part;
+    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de 8 svp\n"); exit(1);}
+    for (i=0; i<nb_part; i++)
+    {
+        part_cerv[i] = i*nb_neurone_par_partie;
+    }
+    //partie 1
+    nbTypeNeuronIci = 2;
+    double repNCumulee1[2] = {0.5, 1};
+    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[0].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[0].repartitionNeuronCumulee = repNCumulee1;
+    brainPart[0].probaConnection = probCo1;
+    //partie 2
+    nbTypeNeuronIci = 1;
+    double repNCumulee2[1] = {1};
+    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4};
+    brainPart[1].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[1].repartitionNeuronCumulee = repNCumulee2;
+    brainPart[1].probaConnection = probCo2;
+    //partie 3
+    nbTypeNeuronIci = 2;
+    double repNCumulee3[2] = {0.7, 1};
+    double probCo3[16] = {/*type 1*/0.1, 0.5, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[2].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[2].repartitionNeuronCumulee = repNCumulee3;
+    brainPart[2].probaConnection = probCo3;
+    //partie 4
+    nbTypeNeuronIci = 3;
+    double repNCumulee4[3] = {0.5, 0.9, 1};
+    double probCo4[24] = {/*type 1*/0.4, 0.5, 0.5, 0.1, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.5, 0.2, 0.5, 0.6, 0.5, 0.45, 0.0, /*type 3*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
+    brainPart[3].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[3].repartitionNeuronCumulee = repNCumulee4;
+    brainPart[3].probaConnection = probCo4;
+    //partie 5
+    nbTypeNeuronIci = 1;
+    double repNCumulee5[1] = {1};
+    double probCo5[8] = {/*type 1*/0.4, 0.4, 0.4, 0.5, 0.1, 0.4, 0.5, 0.4};
+    brainPart[4].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[4].repartitionNeuronCumulee = repNCumulee5;
+    brainPart[4].probaConnection = probCo5;
+    //partie 6
+    nbTypeNeuronIci = 1;
+    double repNCumulee6[1] = {1};
+    double probCo6[8] = {/*type 1*/0.4, 0.4, 0.4, 0.55, 0.4, 0.1, 0.6, 0.4};
+    brainPart[5].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[5].repartitionNeuronCumulee = repNCumulee6;
+    brainPart[5].probaConnection = probCo6;
+    //partie 7
+    nbTypeNeuronIci = 1;
+    double repNCumulee7[1] = {1};
+    double probCo7[8] = {/*type 1*/0.4, 0.2, 0.4, 0.6, 0.4, 0.4, 0.05, 0.4};
+    brainPart[6].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[6].repartitionNeuronCumulee = repNCumulee7;
+    brainPart[6].probaConnection = probCo7;
+    //partie 8
+    nbTypeNeuronIci = 2;
+    double repNCumulee8[2] = {0.3, 1};
+    double probCo8[16] = {/*type 1*/0.05, 0.05, 0.1, 0.05, 0.2, 0.1, 0.1, 0.5, /*type 2*/0.4, 0.5, 0.4, 0.6, 0.4, 0.4, 0.05, 0.1};
+    brainPart[7].nbTypeNeuron = nbTypeNeuronIci;
+    brainPart[7].repartitionNeuronCumulee = repNCumulee8;
+    brainPart[7].probaConnection = probCo8;
+
+    Brain Cerveau;
+    Cerveau.dimension = n;
+    Cerveau.nb_part = nb_part;
+    Cerveau.parties_cerveau = part_cerv;
+    Cerveau.brainPart = brainPart;
+
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank==0) {printf("Debut génération matrice\n");}
     start_time = my_gettimeofday();
 
-    //génération des sous-matrices au format COO
-    //matrice format COO :
-    //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
-    struct IntCOOMatrix A_COO;
-    generate_coo_matrix_for_pagerank(&A_COO, myBlock, 50);
-
-    nb_non_zeros_local = A_COO.len_values;
-    printf("Nombre de non zero local : %i\n",nb_non_zeros_local);//DEL
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-
-    if (debug)
-    {
-        printf("\nVecteur A_COO.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Row[i]);}printf("\n");
-        printf("Vecteur A_COO.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Column[i]);}printf("\n");
-        printf("Vecteur A_COO.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<A_COO.len_values;i++) {printf("%i ",A_COO.Value[i]);}printf("\n");
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    //convertion de la matrice COO au format CSR :
-    //1 ALLOCATION : allocation de mémoire pour CSR_Row qui sera différent de COO_Row. Les vecteurs Column et Value sont communs
+    //génération des sous-matrices au format CSR :
+    //3 ALLOCATIONS : allocation de mémoire pour CSR_Row, CSR_Column et CSR_Value dans la fonction generate_csr_matrix_for_pagerank()
     struct IntCSRMatrix A_CSR;
-    A_CSR.dim_l = A_COO.dim_l;
-    A_CSR.dim_c = A_COO.dim_c;
-    A_CSR.len_values = nb_non_zeros_local;
-    A_CSR.Row = (int *)malloc((n+1) * sizeof(int));
-    A_CSR.Column = A_COO.Column; A_CSR.Value = A_COO.Value; //Vecteurs Column et Value communs
-    coo_to_csr_matrix(&A_COO, &A_CSR);
+
+    neuron_types = (int *)malloc(n * sizeof(int)); //vecteur contenant les types de tout les neurones
+
+    //choix du type de neurone pour chaque neurone du cerveau
+    if (myBlock.indc == 0) //choix des processus qui vont définir les types de neurones
+    {
+        if (debug) {printf("Le processus %i répond à l'appel, il va s'occuper des neurones %li à %li\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
+        generate_neuron_types(&Cerveau, myBlock.indl*nb_ligne, nb_ligne, neuron_types + myBlock.indl*nb_ligne);
+    }
+
+    for (i=0;i<nb_blocks_row;i++)
+    {
+        if (my_rank==0 && debug) {printf("Communication du processus %i vers les autres de %i neurones\n",i*nb_blocks_column,nb_ligne);}
+        MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank==0 && debug)
+    {
+        for (i=0;i<n;i++)
+        {
+            printf("%i ",neuron_types[i]);
+        }
+        printf("\n");
+    }
+
+    generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+
+    total_time = my_gettimeofday() - start_time;
 
     if (debug)
     {
@@ -542,7 +615,7 @@ int main(int argc, char **argv)
             MPI_Barrier(MPI_COMM_WORLD);
             if (my_rank == k)
             {
-                printf("Matrices du processus %i :\n",my_rank);
+                printf("Matrice du processus %i :\n",my_rank);
                 for (i=0;i<myBlock.dim_l;i++)
                 {
                     if (n<=32) //si la dimension de la matrice est inférieur ou égale à 32, on peut l'afficher
@@ -561,8 +634,8 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {printf("Temps écoulé lors de la génération : %.1f s\n", total_time);}
 
-    free(A_COO.Row); free(A_COO.Column); free(A_COO.Value);
-    free(A_CSR.Row);
+    free(neuron_types);
+    free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
 
     MPI_Finalize();
     return 0;
