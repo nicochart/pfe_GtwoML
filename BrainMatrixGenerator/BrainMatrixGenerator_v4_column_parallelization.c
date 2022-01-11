@@ -208,7 +208,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
     Traduit le vecteur Row de la matrice M_COO stockée au format COO en vecteur Row format CSR dans la matrice M_CSR
     A la fin : COO_Column=CSR_Column (adresses), COO_Value=CSR_Value (adresses), et CSR_Row est la traduction en CSR de COO_Row (adresses et valeurs différentes)
     L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
-    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus
+    Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus, et doivent être remplis au préalable.
     */
     long i;
     for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
@@ -240,6 +240,11 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
         }
     }
     *(CSR_Row + current_indl + 1) = (*M_COO).len_values;
+    if (current_indl < (*M_CSR).dim_l) //cas particulier : dernière(s) ligne(s) remplie(s) de 0
+    {
+        current_indl++;
+        *(CSR_Row + current_indl + 1) = i;
+    }
 }
 
 int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)

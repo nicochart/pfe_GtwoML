@@ -1,4 +1,8 @@
 /*Changement de stockage d'une matrice carrée à l*c elements remplie de 0 et de 1 (stockée normalement) en stockage pour matrice creuse (on ne stock pas les 0)*/
+/*
+les fonctions de se fichier n'ont pas été mises à jour : elles utilisent encore des pointeurs vers les vecteurs directement, plutôt que d'utiliser des structures.
+TODO : mettre à jour
+*/
 /*La matrice initiale est générée aléatoirement, c'est une matrice qui pourrait être utilisée pour faire un PageRank non pondéré*/
 /*Nicolas HOCHART*/
 
@@ -148,7 +152,7 @@ void fill_matrix_column_sum_vector(int *sum_vector, int *Column, int *Value, lon
     {
         *(sum_vector+i) = 0;
     }
-    
+
     for (i=0;i<len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
     {
         *(sum_vector + Column[i]) += Value[i];
@@ -176,45 +180,45 @@ int main(int argc, char **argv)
     long long size;
     int nb_zeros,nb_non_zeros;
     int *A;
-    
+
     //variables de la matrice creuse COO et CSR
     int *COO_Row;
     int *Row,*Column;
     int *Value;
-    
+
     //variables pour la normalisation de la matrice
     int *VectSum_Column;
     double *NormValue;
-    
+
     if (argc < 3)
     {
         printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s [l] [c]\n", argv[0]);
         exit(1);
     }
-    
+
     l = atoll(argv[1]);
     c = atoll(argv[2]);
     size = l * c;
     A = (int *)malloc(size * sizeof(int));
-    
+
     for (i=0;i<l;i++)
     {
         init_row_dense_matrix(A, i, c, 75);
     }
-    
+
     nb_zeros = cpt_nb_zeros_matrix(A, size);
     printf("Nombre de zeros : %i\n",nb_zeros);
     nb_non_zeros = size - nb_zeros;
     printf("Nombre de valeurs non nulles : %i\n",nb_non_zeros);
-    
+
     COO_Row = (int *)malloc(nb_non_zeros * sizeof(int));
     Row = (int *)malloc((l+1) * sizeof(int));
     Column = (int *)malloc(nb_non_zeros * sizeof(int));
     Value = (int *)malloc(nb_non_zeros * sizeof(int));
-    
+
     dense_to_coo_matrix(A, COO_Row, Column, Value, l, c);
     coo_to_csr_matrix(COO_Row, Row, nb_non_zeros);
-    
+
     printf("\nVecteur Row :\n");
     for(i=0;i<l+1;i++)
     {
@@ -240,7 +244,7 @@ int main(int argc, char **argv)
         }
         printf("\n");
     }
-    
+
     VectSum_Column = (int *)malloc(c * sizeof(int));
     fill_matrix_column_sum_vector(VectSum_Column, Column, Value, nb_non_zeros, c);
     printf("\nVecteur VectSum_Column (somme des éléments colonne par colonne:\n");
@@ -249,17 +253,17 @@ int main(int argc, char **argv)
         printf("%i ",VectSum_Column[i]);
     }
     printf("\n");
-    
+
     NormValue = (double *)malloc(nb_non_zeros * sizeof(double));
     //copie du vecteur Value dans NormValue
     for(i=0;i<nb_non_zeros;i++)
     {
         NormValue[i] = (double) Value[i];
     }
-    
+
     //normalisation de la matrice (Row, Column, Value) dans (Row, Column, NormValue)
     normalize_matrix(VectSum_Column, Column, NormValue, nb_non_zeros, c);
-    
+
     printf("\nMatrice normalisée sur les colonnes (stockée en format CSR):\n");
     for (i=0;i<l;i++)
     {
