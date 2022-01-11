@@ -273,20 +273,19 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
 
-void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo, int zero_percentage, long l, long c)
+void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo, int zero_percentage)
 {
     /*
     Génère complètement aléatoirement (ne correspondant pas à un cerveau) la matrice creuse (*M_COO) (format COO) pour PageRank.
-    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
-    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
-    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
+    BlockInfo contient les informations du block parallèle dans lequel est générée la matrice (ou le morceau de matrice). Il contient les indices auxquels commence le block, .. (voir définition du type)
+    Les nombres de ligne et nombre de colonnes de la matrice sont passés en paramètres dans BlockInfo.dim_l et BlockInfo.dim_c, ils seront stockés dans M_COO.dim_l et M_COO.dim_c
     Statistiquement, il y a zero_percentage % de 0 dans la matrice l*c.
     Environs zero_percentage % de la matrice dense correspondante sont des 0 et (100 - zero_percentage) % sont des 1.
-    (Ce n'est pas exact, car un test est effectué avec ind_start_row pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
+    (Ce n'est pas exact, car un test est effectué avec BlockInfo.startRow et BlockInfo.startColumn pour remplir la diagonale de 0. Ce problème sera corrigé plus tard)
     */
-    long i = 0, j = 0, cpt_values, size = BlockInfo.dim_l * BlockInfo.dim_c;
+    long i, j, cpt_values, size = BlockInfo.dim_l * BlockInfo.dim_c;
     long mean_nb_non_zeros = (int) size * (100 - zero_percentage) / 100; //nombre moyen de 1 dans la matrice
-    (*M_COO).dim_l = l; (*M_COO).dim_c = c;
+    (*M_COO).dim_l = BlockInfo.dim_l; (*M_COO).dim_c = BlockInfo.dim_c;
     //Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
     //La mémoire allouée est (statistiquement) plus grande que la mémoire qui sera utilisée en pratique. On ne peut pas savoir à l'avance exactement combien de valeurs aura la matrice.
     (*M_COO).Row = (int *)malloc(mean_nb_non_zeros * sizeof(int));
@@ -294,10 +293,9 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo
     (*M_COO).Value = (int *)malloc(mean_nb_non_zeros * sizeof(int));
 
     cpt_values=0;
-    while (i <= BlockInfo.dim_l) //parcours des lignes
+    for (i=0;i<BlockInfo.dim_l;i++) //parcours des lignes
     {
-        j = 0;
-        while (j <= BlockInfo.dim_c) //parcours des colonnes
+        for (j=0;j<BlockInfo.dim_c;j++) //parcours des colonnes
         {
             if ( (BlockInfo.startRow + i != BlockInfo.startColumn + j) && random_between_0_and_1() > zero_percentage/100.0) //si on est dans le pourcentage de non zero et qu'on est pas dans la diagonale, alors on place un 1
             {
@@ -309,9 +307,7 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo
                     cpt_values++;
                 }
             }
-            j++;
         }
-        i++;
     }
     (*M_COO).len_values = cpt_values;
 }
@@ -499,7 +495,7 @@ int main(int argc, char **argv)
     //matrice format COO :
     //3 ALLOCATIONS : allocation de mémoire pour COO_Row, COO_Column et COO_Value dans la fonction generate_coo_matrix_for_pagerank()
     struct IntCOOMatrix A_COO;
-    generate_coo_matrix_for_pagerank(&A_COO, myBlock, 50, nb_ligne, n);
+    generate_coo_matrix_for_pagerank(&A_COO, myBlock, 50);
 
     nb_non_zeros_local = A_COO.len_values;
     printf("Nombre de non zero local : %i\n",nb_non_zeros_local);//DEL
