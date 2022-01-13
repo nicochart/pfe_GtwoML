@@ -360,7 +360,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
             //récupération de l'indice de la partie source
             ind_part_source = get_brain_part_ind(BlockInfo.startColumn+j, brain);
             //récupération du type de neurone
-            source_type = neuron_types[j];
+            source_type = neuron_types[BlockInfo.startColumn+j];
             //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
             proba_no_connection = 1 - proba_connection;
