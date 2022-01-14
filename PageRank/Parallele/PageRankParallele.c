@@ -7,6 +7,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+#include "param.h"
 
 #define NULL ((void *)0)
 
@@ -63,27 +64,6 @@ struct MatrixBlock
      long endColumn; //Indice de fin en colonne (inclu)
 };
 typedef struct MatrixBlock MatrixBlock;
-
-/*----------------------------------------------------------------------
---- Structure contenant les informations d'un cerveau et ses parties ---
-----------------------------------------------------------------------*/
-
-struct BrainPart
-{
-     int nbTypeNeuron;
-     double * repartitionNeuronCumulee; //taille nbTypeNeuron
-     double * probaConnection; //taille (ligne) nbTypeNeuron * (colonne) nb_part
-};
-typedef struct BrainPart BrainPart;
-
-struct Brain
-{
-     long dimension; //nombre de neurones total
-     int nb_part; //nombre de parties
-     long * parties_cerveau; //taille nb_part - indices de 0 à n (dimension de la matrice) auxquels commencent les parties du cerveau
-     BrainPart * brainPart; //taille nb_part - adresse d'un vecteur de pointeurs vers des BrainPart.
-};
-typedef struct Brain Brain;
 
 //structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_coo_brain_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
@@ -545,12 +525,18 @@ int main(int argc, char **argv)
 
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
 
+    //recuperation du cerveau
+    Brain Cerveau;
+    paramBrain(&Cerveau,&n);
+
     if (argc < 2)
     {
         if (my_rank==0) {printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\nVous pouvez aussi préciser le nombre de blocks en ligne et en colonne dans la matrice de blocks : %s n nb_blocks_row nb_blocks_column\n", argv[0],argv[0]);}
         exit(1);
     }
-    n = atoll(argv[1]);
+    if (argc >=2){
+        n = atoll(argv[1]);
+    }
     if (argc < 4)
     {
         if (my_rank == 0) {printf("Si vous voulez saisir le nombre de blocs (parallèles), veuillez les préciser dans les deux dimensions : %s n nb_blocks_row nb_blocks_column\nValeur prise par défaut : sqrt(%i) = %i\n", argv[0], p, q);}
@@ -600,97 +586,24 @@ int main(int argc, char **argv)
     if (my_rank == 0)
     {
         printf("----------------------\nBilan de votre matrice :\n");
-        printf("Taille : %li * %li = %li\n",n,n,size);
+        printf("Taille : %li * %li = %lli\n",n,n,size);
         printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
     }
-
-    //Cerveau écrit en brute (pour essayer)
-    int nbTypeNeuronIci,nb_part=8;
-    BrainPart brainPart[nb_part];
-    long part_cerv[nb_part];
-    long nb_neurone_par_partie = n / nb_part;
-    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de %i svp\n",nb_part); exit(1);}
-    for (i=0; i<nb_part; i++)
-    {
-        part_cerv[i] = i*nb_neurone_par_partie;
-    }
-    //partie 1
-    nbTypeNeuronIci = 2;
-    double repNCumulee1[2] = {0.5, 1};
-    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[0].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[0].repartitionNeuronCumulee = repNCumulee1;
-    brainPart[0].probaConnection = probCo1;
-    //partie 2
-    nbTypeNeuronIci = 1;
-    double repNCumulee2[1] = {1};
-    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4};
-    brainPart[1].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[1].repartitionNeuronCumulee = repNCumulee2;
-    brainPart[1].probaConnection = probCo2;
-    //partie 3
-    nbTypeNeuronIci = 2;
-    double repNCumulee3[2] = {0.7, 1};
-    double probCo3[16] = {/*type 1*/0.1, 0.5, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[2].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[2].repartitionNeuronCumulee = repNCumulee3;
-    brainPart[2].probaConnection = probCo3;
-    //partie 4
-    nbTypeNeuronIci = 3;
-    double repNCumulee4[3] = {0.5, 0.9, 1};
-    double probCo4[24] = {/*type 1*/0.4, 0.5, 0.5, 0.1, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.5, 0.2, 0.5, 0.6, 0.5, 0.45, 0.0, /*type 3*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[3].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[3].repartitionNeuronCumulee = repNCumulee4;
-    brainPart[3].probaConnection = probCo4;
-    //partie 5
-    nbTypeNeuronIci = 1;
-    double repNCumulee5[1] = {1};
-    double probCo5[8] = {/*type 1*/0.4, 0.4, 0.4, 0.5, 0.1, 0.4, 0.5, 0.4};
-    brainPart[4].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[4].repartitionNeuronCumulee = repNCumulee5;
-    brainPart[4].probaConnection = probCo5;
-    //partie 6
-    nbTypeNeuronIci = 1;
-    double repNCumulee6[1] = {1};
-    double probCo6[8] = {/*type 1*/0.4, 0.4, 0.4, 0.55, 0.4, 0.1, 0.6, 0.4};
-    brainPart[5].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[5].repartitionNeuronCumulee = repNCumulee6;
-    brainPart[5].probaConnection = probCo6;
-    //partie 7
-    nbTypeNeuronIci = 1;
-    double repNCumulee7[1] = {1};
-    double probCo7[8] = {/*type 1*/0.4, 0.2, 0.4, 0.6, 0.4, 0.4, 0.05, 0.4};
-    brainPart[6].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[6].repartitionNeuronCumulee = repNCumulee7;
-    brainPart[6].probaConnection = probCo7;
-    //partie 8
-    nbTypeNeuronIci = 2;
-    double repNCumulee8[2] = {0.3, 1};
-    double probCo8[16] = {/*type 1*/0.05, 0.05, 0.1, 0.05, 0.2, 0.1, 0.1, 0.5, /*type 2*/0.4, 0.5, 0.4, 0.6, 0.4, 0.4, 0.05, 0.1};
-    brainPart[7].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[7].repartitionNeuronCumulee = repNCumulee8;
-    brainPart[7].probaConnection = probCo8;
-
-    Brain Cerveau;
-    Cerveau.dimension = n;
-    Cerveau.nb_part = nb_part;
-    Cerveau.parties_cerveau = part_cerv;
-    Cerveau.brainPart = brainPart;
 
     if (my_rank == 0)
     {
       printf("\n#############\nRecap de votre cerveau :\n");
 
-      printf("Taille : %i*%i\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
+      printf("Taille : %li*%li\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
       for (i=0; i<Cerveau.nb_part; i++)
       {
-          printf("%i ",Cerveau.parties_cerveau[i]);
+          printf("%li ",Cerveau.parties_cerveau[i]);
       }
       printf("]\n\n");
       for (i=0; i<Cerveau.nb_part; i++)
       {
           printf("\n");
-          printf("Partie %i :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
+          printf("Partie %li :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
           printf("Probabilités cumulées d'appartenir à chaque type de neurone : [");
           for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
           {
@@ -699,10 +612,10 @@ int main(int argc, char **argv)
           printf("]\n\tConnections :\n\t");
           for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
           {
-              printf("Connections du type de neurone d'indice %i :\n\t",j);
+              printf("Connections du type de neurone d'indice %li :\n\t",j);
               for (k=0;k<Cerveau.nb_part;k++)
               {
-                  printf("%i -> %i : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
+                  printf("%li -> %li : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
               }
           }
       }
@@ -728,7 +641,7 @@ int main(int argc, char **argv)
 
     for (i=0;i<nb_blocks_row;i++)
     {
-        if (my_rank==0 && debug) {printf("Communication du processus %i vers les autres de %i neurones\n",i*nb_blocks_column,nb_ligne);}
+        if (my_rank==0 && debug) {printf("Communication du processus %li vers les autres de %li neurones\n",i*nb_blocks_column,nb_ligne);}
         MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
     }
 
@@ -864,7 +777,7 @@ int main(int argc, char **argv)
         //-- fin itération--
         if (debug && my_rank==0)
         {
-            printf("--------------- itération %i :\n",cpt_iterations);
+            printf("--------------- itération %li :\n",cpt_iterations);
             printf("old_q :"); for(i=0;i<n;i++) {printf("%.2f ",old_q[i]);}printf("\nnew_q : "); for(i=0;i<n;i++) {printf("%.2f ",new_q[i]);} printf("\n");
         }
         cpt_iterations++;
@@ -889,7 +802,7 @@ int main(int argc, char **argv)
             nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
             if (my_rank == 0)
             {
-                printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
+                printf("neurone %li, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
             }
             sum_pourcentage_espere += pourcentage_espere;
         }
@@ -905,11 +818,11 @@ int main(int argc, char **argv)
         {
             printf("\nRésultat ");
             for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
-            printf("obtenu en %i itérations\n",cpt_iterations);
+            printf("obtenu en %li itérations\n",cpt_iterations);
         }
         else
         {
-            printf("Résultat %.4f %.4f ... %.4f obtenu en %i itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
+            printf("Résultat %.4f %.4f ... %.4f obtenu en %li itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
         }
     }
 
@@ -925,7 +838,7 @@ int main(int argc, char **argv)
     free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
     free(P_CSR.Value); //Row et Column communs avec la matrice CSR
-
+    destructeurBrain(&Cerveau);
     if (debug_cerveau)
     {
         free(MatrixDebugInfo.nb_connections); //MatrixDebugInfo.types est free plus haut : free(neuron_types);
