@@ -314,32 +314,17 @@ int main(int argc, char **argv)
     //allocation mémoire pour les nombres de 0 dans chaque sous matrice de chaque processus
     if (debug) {list_nb_non_zeros_local = (long *)malloc(p * sizeof(long));}
 
-    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
-    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
-
     //recuperation du cerveau
     Brain Cerveau;
     paramBrain(&Cerveau,&n);
-    /*if (argc < 2)
+    if (argc < 2)
     {
-        printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n Vous pouvez aussi indiquer des pourcentages de 0 pour chaque bloc après le n.\n", argv[0]);
-        exit(1);
+        printf("Le n sélectionné correspond a celui du fichier de config\n", argv[0]);
     }
-    n = atoll(argv[1]);
-    if (argc > 2)
+    else if (argc == 2)
     {
-        for (i=2;i<argc && i<p+2;i++)
-        {
-            *(zeros_percentages+i-2) = 100 - atoll(argv[i]);
-        }
+        n = atoll(argv[1]);
     }
-
-    if (debug && my_rank == 0)
-    {
-        printf("Liste des pourcentages de 0 dans chaque bloc :\n");
-        for (i=0;i<p;i++) {printf("%i ",zeros_percentages[i]);}
-        printf("\n");
-    }*/
 
     size = n * n;
     long nb_ligne = n/p; //nombre de lignes par bloc
