@@ -1,0 +1,37 @@
+[
+	{
+		"namePart": "part1",
+		"id": 0,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.8,0.2],
+		"nbTypeNeuron": 2,
+		"nbNeuron": 10,
+		"typeNeuron":[
+			{
+				"name": "A",
+				"nbNeuron": 7,
+				"nbConnection": 2
+			},
+			{
+				"name": "B",
+				"nbNeuron": 3,
+				"nbConnection": 5
+			}
+		]
+	},
+	{
+		"namePart": "part2",
+		"id": 1,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.25,0.75],
+		"nbTypeNeuron": 1,
+		"nbNeuron":5,
+		"typeNeuron":[
+			{
+				"name": "C",
+				"nbNeuron": 5,
+				"nbConnection": 6
+			}
+		]
+	}
+]

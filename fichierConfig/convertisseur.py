@@ -2,7 +2,7 @@ import json
 
 def writeData(out):
     #Ecriture
-    f = open("param.cfg","w")
+    f = open("param.h","w")
     f.write(out)
     f.close()
 
@@ -45,24 +45,50 @@ def probaConnection(data):
                 probaConnect[i+len(data)][j][k+len(data)] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
     return probaConnect
 
-data = loadData("configCortex.json")
-out = ""
-nnc = numberNeuronCumul(data)
-for i in range(len(nnc)):
-    out += str(nnc[i])+" "
-out+= "-1 "
-dnc = distribNeuronCumul(data)
-for i in range(len(dnc)):
-    out += str(dnc[i]) + " "
-out += "-1 "
-pc = probaConnection(data)
-for i in range(len(pc)):
-    out += str(pc[i]) + " "
+data = loadData("littleConfigTest.json")
+nbNeuronCumul = numberNeuronCumul(data)
+distribNeuronCumul = distribNeuronCumul(data)
+probaConnection = probaConnection(data)
 
+nbPart = len(nbNeuronCumul)
+#struct BrainPart
+out="struct BrainPart{\n\tint nbTypeNeuron;\n\tdouble * repartitionNeuronCumulee;\n\tdouble * probaConnection;\n};\ntypedef struct BrainPart BrainPart;\n\n"
+#struct Brain
+out+="struct Brain{\n\tlong dimension;\n\tint nb_part;\n\tlong * parties_cerveau;\n\tBrainPart * brainPart;\n};\ntypedef struct Brain Brain;\n\n"
+#getNbPart
+out+="int get_nb_part(){\n\treturn "+str(nbPart)+";\n}\n\n"
+#destructeur
+out+="void destructeurBrain(Brain *Cerveau){\n"
+for i in range(len(nbNeuronCumul)):
+    out+="\tfree(Cerveau->brainPart["+str(i)+"].repartitionNeuronCumulee);\n"
+    out+="\tfree(Cerveau->brainPart["+str(i)+"].probaConnection);\n"
+out+="\tfree(Cerveau->parties_cerveau);\n\tfree(Cerveau->brainPart);\n}\n\n"
+#parametreCerveau
+#les choses intéressante commence ici
+#initialisation
+out+="void paramBrain(Brain *Cerveau, long *n){\n\tint nbTypeNeuronIci,nb_part="+str(nbPart)+";\n"
+out+="\t*n="+str(int(sum(nbNeuronCumul)))+";\n\tBrainPart *brainPart = malloc(sizeof(BrainPart)*nb_part);\n"
+out+="\tlong *part_cerv = malloc(sizeof(long)*nb_part);\n\tlong nb_neurone_par_partie = *n / nb_part;\n\tif (nb_part * nb_neurone_par_partie != *n) {printf(\"Erreur nbPart*nb_neurone_par_partie!=n(numberTotalofNeuron)\\n\"); exit(1);}\n\tfor (int i=0; i<nb_part; i++){part_cerv[i] = i*nb_neurone_par_partie;}\n\n"
+#partie du cerveau
+for i in range(len(nbNeuronCumul)):
+    out+="//partie "+str(i)+"\n"
+    out+="\tbrainPart["+str(i)+"].nbTypeNeuron = "+str(len(distribNeuronCumul[i]))+";\n"
+    #repartitionNeuronCumulee
+    out+="\tbrainPart["+str(i)+"].repartitionNeuronCumulee = malloc(sizeof(double)*"+str(len(distribNeuronCumul[i]))+");\n"
+    for j in range(len(distribNeuronCumul[i])):
+        out+="\tbrainPart["+str(i)+"].repartitionNeuronCumulee["+str(j)+"] = "+str(distribNeuronCumul[i][j])+";\n"
+    #probaConnection
+    out += "\tbrainPart["+str(i)+"].probaConnection = malloc(sizeof(double)*"+str(len(distribNeuronCumul[i])*nbPart)+");\n"
+    for j in range(len(distribNeuronCumul[i])):
+        for k in range(nbPart):
+            ind = j*nbPart+k
+            out+="\tbrainPart["+str(i)+"].probaConnection["+str(ind)+"] = "+str(probaConnection[i][j][k])+";\n"
+#attribution dans Cerveau
+out+="\tCerveau->dimension = *n;\n\tCerveau->nb_part = nb_part;\n\tCerveau->parties_cerveau = part_cerv;\n\tCerveau->brainPart = brainPart;\n}"
 
 """
-out = "neuronByPart = "+str(numberNeuronCumul(data))+"\n"
-out += "neuronType = "+str(distribNeuronCumul(data))+"\n"
-out += "probaConnection = "+str(probaConnection(data))+"\n"
+out += "neuronByPart = "+str(nbNeuronCumul)+"\n"
+out += "neuronType = "+str(distribNeuronCumul)+"\n"
+out += "probaConnection = "+str(probaConnection)+"\n"
 """
 writeData(out)
