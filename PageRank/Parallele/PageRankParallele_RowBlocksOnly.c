@@ -1,4 +1,4 @@
-/*Travail sur PageRank non pondéré parallele*/
+/*PageRank non pondéré parallele utilisant le générateur V3 (Matrice parallèle avec blocks sur les ligne uniquement)*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
