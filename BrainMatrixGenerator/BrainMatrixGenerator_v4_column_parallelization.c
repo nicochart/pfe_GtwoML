@@ -421,12 +421,6 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    if ((double) sqrt(p) != (int) sqrt(p))
-    {
-        if (my_rank == 0) {printf("Erreur : le nombre de coeurs disponible (%i) n'a pas de racine entière..\nOn doit pouvoir le passer à la racine et obtenir un nombre entier pour pouvoir diviser en ligne et colonnes.\n",p);}
-        exit(1);
-    }
-
     int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
@@ -443,23 +437,31 @@ int main(int argc, char **argv)
 
     if (argc < 2)
     {
-        printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n Vous pouvez aussi indiquer des pourcentages de 0 pour chaque bloc après le n.\n", argv[0]);
+        if (my_rank==0) {printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\nVous pouvez aussi préciser le nombre de blocks en ligne et en colonne dans la matrice de blocks : %s n nb_blocks_row nb_blocks_column\n", argv[0],argv[0]);}
         exit(1);
     }
     n = atoll(argv[1]);
     if (argc < 4)
     {
-        if (my_rank == 0) {printf("Si vous voulez saisir le nombre de blocs (parallèles), veuillez les préciser dans les deux dimensions : %s n l c\nValeur prise par défaut : sqrt(%i) = %i\n", argv[0], p, q);}
+        if (my_rank == 0) {printf("Si vous voulez saisir le nombre de blocs (parallèles), veuillez les préciser dans les deux dimensions : %s n nb_blocks_row nb_blocks_column\nValeur prise par défaut : sqrt(%i) = %i\n", argv[0], p, q);}
     }
     else if (argc >= 4) //dans le cas où on a des paramètres correspondant au nombre de blocs dans les dimensions
     {
         nb_blocks_row = atoll(argv[2]);
         nb_blocks_column = atoll(argv[3]);
-        if (nb_blocks_row * nb_blocks_column != p)
+    }
+
+    if (nb_blocks_row * nb_blocks_column != p)
+    {
+        if (my_rank == 0)
         {
-            if (my_rank == 0) {printf("Erreur : %i * %i != %i. Usage : %s n nb_blocks_row nb_blocks_column (les nombres de blocs par ligne/colonne multipliés doit être égale à %i, le nombre de coeurs alloués)\n", nb_blocks_row, nb_blocks_column, p, argv[0], p);}
-            exit(1);
+            printf("Erreur : %i * %i != %i. Usage : %s n nb_blocks_row nb_blocks_column (les nombres de blocs par ligne/colonne multipliés doit être égale à %i, le nombre de coeurs alloués)\n", nb_blocks_row, nb_blocks_column, p, argv[0], p);
+            if (argc < 4)
+            {
+                printf("nb_blocks_row nb_blocks_column n'étant pas précisés, la valeur prise par défaut serait sqrt(%i).. Mais le nombre de coeurs disponible (%i) n'a pas de racine entière..\nNous ne pouvons pas prendre cette valeur par défaut", p, p);
+            }
         }
+        exit(1);
     }
 
     size = n * n; //taille de la matrice
@@ -490,7 +492,7 @@ int main(int argc, char **argv)
     BrainPart brainPart[nb_part];
     long part_cerv[nb_part];
     long nb_neurone_par_partie = n / nb_part;
-    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de 8 svp\n"); exit(1);}
+    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de %i svp\n",nb_part); exit(1);}
     for (i=0; i<nb_part; i++)
     {
         part_cerv[i] = i*nb_neurone_par_partie;
