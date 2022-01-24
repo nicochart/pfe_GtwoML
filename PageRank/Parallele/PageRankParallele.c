@@ -512,7 +512,7 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long long i,j,k; //pour les boucles
     long long n;
     int q = sqrt(p);
@@ -591,24 +591,24 @@ int main(int argc, char **argv)
     if (my_rank == 0)
     {
         printf("----------------------\nBilan de votre matrice :\n");
-        printf("Taille : %li * %li = %lli\n",n,n,size);
-        printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
+        printf("Taille : %lli * %lli = %lli\n",n,n,size);
+        printf("%i blocs sur les lignes (avec %lli lignes par bloc) et %i blocs sur les colonnes (avec %lli colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
     }
 
     if (my_rank == 0)
     {
       printf("\n#############\nRecap de votre cerveau :\n");
 
-      printf("Taille : %li*%li\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
+      printf("Taille : %lli*%lli\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
       for (i=0; i<Cerveau.nb_part; i++)
       {
-          printf("%li ",Cerveau.parties_cerveau[i]);
+          printf("%lli ",Cerveau.parties_cerveau[i]);
       }
       printf("]\n\n");
       for (i=0; i<Cerveau.nb_part; i++)
       {
           printf("\n");
-          printf("Partie %li :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
+          printf("Partie %lli :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
           printf("Probabilités cumulées d'appartenir à chaque type de neurone : [");
           for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
           {
@@ -617,10 +617,10 @@ int main(int argc, char **argv)
           printf("]\n\tConnections :\n\t");
           for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
           {
-              printf("Connections du type de neurone d'indice %li :\n\t",j);
+              printf("Connections du type de neurone d'indice %lli :\n\t",j);
               for (k=0;k<Cerveau.nb_part;k++)
               {
-                  printf("%li -> %li : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
+                  printf("%lli -> %lli : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
               }
           }
       }
@@ -640,13 +640,13 @@ int main(int argc, char **argv)
     //choix du type de neurone pour chaque neurone du cerveau
     if (myBlock.indc == 0) //choix des processus qui vont définir les types de neurones
     {
-        if (debug) {printf("Le processus %i répond à l'appel, il va s'occuper des neurones %li à %li\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
+        if (debug) {printf("Le processus %i répond à l'appel, il va s'occuper des neurones %lli à %lli\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
         generate_neuron_types(&Cerveau, myBlock.indl*nb_ligne, nb_ligne, neuron_types + myBlock.indl*nb_ligne);
     }
 
     for (i=0;i<nb_blocks_row;i++)
     {
-        if (my_rank==0 && debug) {printf("Communication du processus %li vers les autres de %li neurones\n",i*nb_blocks_column,nb_ligne);}
+        if (my_rank==0 && debug) {printf("Communication du processus %lli vers les autres de %lli neurones\n",i*nb_blocks_column,nb_ligne);}
         MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
     }
 
@@ -698,7 +698,7 @@ int main(int argc, char **argv)
 
         if (my_rank == 0)
         {
-            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %lli\nNombre de cases mémoires effectivement utilisées : %lli\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
         }
     }
 
@@ -782,7 +782,7 @@ int main(int argc, char **argv)
         //-- fin itération--
         if (debug && my_rank==0)
         {
-            printf("--------------- itération %li :\n",cpt_iterations);
+            printf("--------------- itération %lli :\n",cpt_iterations);
             printf("old_q :"); for(i=0;i<n;i++) {printf("%.2f ",old_q[i]);}printf("\nnew_q : "); for(i=0;i<n;i++) {printf("%.2f ",new_q[i]);} printf("\n");
         }
         cpt_iterations++;
@@ -807,7 +807,7 @@ int main(int argc, char **argv)
             nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
             if (my_rank == 0)
             {
-                printf("neurone %li, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
+                printf("neurone %lli, type: %i, partie: %i, nbconnections: %lli, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
             }
             sum_pourcentage_espere += pourcentage_espere;
         }
@@ -823,11 +823,11 @@ int main(int argc, char **argv)
         {
             printf("\nRésultat ");
             for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
-            printf("obtenu en %li itérations\n",cpt_iterations);
+            printf("obtenu en %lli itérations\n",cpt_iterations);
         }
         else
         {
-            printf("Résultat %.4f %.4f ... %.4f obtenu en %li itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
+            printf("Résultat %.4f %.4f ... %.4f obtenu en %lli itérations\n",new_q[0],new_q[1],new_q[n-1],cpt_iterations);
         }
     }
 
