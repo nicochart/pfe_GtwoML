@@ -45,7 +45,7 @@ def probaConnection(data):
                 probaConnect[i+len(data)][j][k+len(data)] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
     return probaConnect
 
-data = loadData("littleConfigTest.json")
+data = loadData("configTest2.json")
 nbNeuronCumul = numberNeuronCumul(data)
 distribNeuronCumul = distribNeuronCumul(data)
 probaConnection = probaConnection(data)

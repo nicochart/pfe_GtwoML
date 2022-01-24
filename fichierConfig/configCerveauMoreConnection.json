@@ -1,0 +1,83 @@
+[
+	{
+		"namePart": "occipital",
+		"id": 0,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.45,0.15,0.15,0.15,0.1],
+		"nbTypeNeuron": 1,
+		"nbNeuron": 4280000000,
+		"typeNeuron":[
+			{
+				"name": "xxx",
+				"nbNeuron": 4280000000,
+				"nbConnection": 3170000
+			}
+		]
+	},
+	{
+		"namePart": "parietal",
+		"id": 1,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.15,0.45,0.15,0.15,0.1],
+		"nbTypeNeuron": 1,
+		"nbNeuron": 6970000000,
+		"typeNeuron":[
+			{
+				"name": "xxx",
+				"nbNeuron": 6970000000,
+				"nbConnection": 6870000
+			}
+		]
+	},
+	{
+		"namePart": "temporal",
+		"id": 2,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.15,0.15,0.45,0.15,0.1],
+		"nbTypeNeuron": 1,
+		"nbNeuron": 6570000000,
+		"typeNeuron":[
+			{
+				"name": "xxx",
+				"nbNeuron": 6570000000,
+				"nbConnection": 8600000
+			}
+		]
+	},
+	{
+		"namePart": "frontal",
+		"id": 3,
+		"connectionOpposite" : 0.2,
+		"distribution": [0.15,0.15,0.15,0.45,0.1],
+		"nbTypeNeuron": 1,
+		"nbNeuron": 7500000000,
+		"typeNeuron":[
+			{
+				"name": "xxx",
+				"nbNeuron": 7500000000,
+				"nbConnection": 8960000
+			}
+		]
+	},
+	{
+		"namePart": "cerebellum",
+		"id": 4,
+		"connectionOpposite": 0.2,
+		"distribution": [0.1,0.1,0.1,0.1,0.6],
+		"nbTypeNeuron": 2,
+		"nbNeuron": 65000000000000,
+		"typeNeuron":[
+			{
+				"name": "Purkinje",
+				"nbNeuron": 15000000000000,
+				"nbConnection": 250000000
+			},
+			{
+				"name": "Granule cells",
+				"nbNeuron": 50000000000000,
+				"nbConnection": 100000,
+				"neurotransmitter":"glutamate"
+			}
+		]
+	}
+]
