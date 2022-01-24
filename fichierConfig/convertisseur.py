@@ -57,7 +57,7 @@ nbPart = len(nbNeuronCumul)
 #struct BrainPart
 out="struct BrainPart{\n\tint nbTypeNeuron;\n\tdouble * repartitionNeuronCumulee;\n\tdouble * probaConnection;\n};\ntypedef struct BrainPart BrainPart;\n\n"
 #struct Brain
-out+="struct Brain{\n\tlong dimension;\n\tint nb_part;\n\tlong * parties_cerveau;\n\tBrainPart * brainPart;\n};\ntypedef struct Brain Brain;\n\n"
+out+="struct Brain{\n\tlong long dimension;\n\tint nb_part;\n\tlong long * parties_cerveau;\n\tBrainPart * brainPart;\n};\ntypedef struct Brain Brain;\n\n"
 #getNbPart
 out+="int get_nb_part(){\n\treturn "+str(nbPart)+";\n}\n\n"
 #destructeur
@@ -69,9 +69,9 @@ out+="\tfree(Cerveau->parties_cerveau);\n\tfree(Cerveau->brainPart);\n}\n\n"
 #parametreCerveau
 #les choses intéressante commence ici
 #initialisation
-out+="void paramBrain(Brain *Cerveau, long *n){\n\tint nbTypeNeuronIci,nb_part="+str(nbPart)+";\n"
+out+="void paramBrain(Brain *Cerveau, long long *n){\n\tint nbTypeNeuronIci,nb_part="+str(nbPart)+";\n"
 out+="\t*n="+str(int(nbNeuronCumul[-1]))+";\n\tBrainPart *brainPart = malloc(sizeof(BrainPart)*nb_part);\n"
-out+="\tlong *part_cerv = malloc(sizeof(long)*nb_part);\n"
+out+="\tlong long *part_cerv = malloc(sizeof(long long)*nb_part);\n"
 out+="\tpart_cerv[0] = 0;\n"
 for i in range(int(nbPart)-1):
     out+="\tpart_cerv["+str(int(i+1))+"] = "+str(int(nbNeuronCumul[i]))+";\n"
