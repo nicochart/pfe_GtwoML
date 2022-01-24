@@ -529,6 +529,7 @@ int main(int argc, char **argv)
     Brain Cerveau;
     paramBrain(&Cerveau,&n);
 
+
     if (argc < 2)
     {
         if (my_rank==0) {printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\nVous pouvez aussi préciser le nombre de blocks en ligne et en colonne dans la matrice de blocks : %s n nb_blocks_row nb_blocks_column\n", argv[0],argv[0]);}
@@ -536,6 +537,10 @@ int main(int argc, char **argv)
     }
     if (argc >=2){
         n = atoll(argv[1]);
+        for (i=0;i<Cerveau.nb_part;i++){
+          Cerveau.parties_cerveau[i] = Cerveau.parties_cerveau[i]*n/Cerveau.dimension;
+        }
+        Cerveau.dimension = n;
     }
     if (argc < 4)
     {

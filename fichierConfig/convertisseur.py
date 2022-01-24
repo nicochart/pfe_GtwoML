@@ -31,6 +31,9 @@ def distribNeuronCumul(data):
     return repartitionNeuronCumul
 
 def probaConnection(data):
+    sommeNbNeuron = 0
+    for i in range(len(data)):
+        sommeNbNeuron+=data[i]["nbNeuron"]
     probaConnect = [[] for i in range(len(data)*2)]
     for i in range(len(data)):
         probaConnect[i] = [[] for n in range(data[i]["nbTypeNeuron"])]
@@ -39,10 +42,10 @@ def probaConnection(data):
             probaConnect[i][j] = [0 for n in range(len(data)*2)]
             probaConnect[i+len(data)][j] = [0 for n in range(len(data)*2)]
             for k in range(len(data)):
-                probaConnect[i][j][k] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
-                probaConnect[i][j][k+len(data)] = data[i]["connectionOpposite"]*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
-                probaConnect[i+len(data)][j][k] = data[i]["connectionOpposite"]*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
-                probaConnect[i+len(data)][j][k+len(data)] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/data[i]["nbNeuron"]
+                probaConnect[i][j][k] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/sommeNbNeuron
+                probaConnect[i][j][k+len(data)] = data[i]["connectionOpposite"]*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/sommeNbNeuron
+                probaConnect[i+len(data)][j][k] = data[i]["connectionOpposite"]*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/sommeNbNeuron
+                probaConnect[i+len(data)][j][k+len(data)] = (1-data[i]["connectionOpposite"])*data[i]["distribution"][k]*data[i]["typeNeuron"][j]["nbConnection"]/sommeNbNeuron
     return probaConnect
 
 data = loadData("configTest2.json")
@@ -67,8 +70,13 @@ out+="\tfree(Cerveau->parties_cerveau);\n\tfree(Cerveau->brainPart);\n}\n\n"
 #les choses intéressante commence ici
 #initialisation
 out+="void paramBrain(Brain *Cerveau, long *n){\n\tint nbTypeNeuronIci,nb_part="+str(nbPart)+";\n"
-out+="\t*n="+str(int(sum(nbNeuronCumul)))+";\n\tBrainPart *brainPart = malloc(sizeof(BrainPart)*nb_part);\n"
-out+="\tlong *part_cerv = malloc(sizeof(long)*nb_part);\n\tlong nb_neurone_par_partie = *n / nb_part;\n\tif (nb_part * nb_neurone_par_partie != *n) {printf(\"Erreur nbPart*nb_neurone_par_partie!=n(numberTotalofNeuron)\\n\"); exit(1);}\n\tfor (int i=0; i<nb_part; i++){part_cerv[i] = i*nb_neurone_par_partie;}\n\n"
+out+="\t*n="+str(int(nbNeuronCumul[-1]))+";\n\tBrainPart *brainPart = malloc(sizeof(BrainPart)*nb_part);\n"
+out+="\tlong *part_cerv = malloc(sizeof(long)*nb_part);\n"
+out+="\tpart_cerv[0] = 0;\n"
+for i in range(int(nbPart)-1):
+    out+="\tpart_cerv["+str(int(i+1))+"] = "+str(int(nbNeuronCumul[i]))+";\n"
+
+
 #partie du cerveau
 for i in range(len(nbNeuronCumul)):
     out+="//partie "+str(i)+"\n"
