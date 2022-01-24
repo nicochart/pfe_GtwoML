@@ -20,9 +20,9 @@ struct IntCOOMatrix
      int * Row; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     long dim_l; //nombre de lignes
-     long dim_c; //nombre de colonnes
-     long len_values; //taille des vecteurs Row, Column et Value
+     long long dim_l; //nombre de lignes
+     long long dim_c; //nombre de colonnes
+     long long len_values; //taille des vecteurs Row, Column et Value
 };
 typedef struct IntCOOMatrix IntCOOMatrix;
 
@@ -31,9 +31,9 @@ struct IntCSRMatrix
      int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
      int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      int * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     long dim_l; //nombre de lignes
-     long dim_c; //nombre de colonnes
-     long len_values;  //taille des vecteurs Column et Value
+     long long dim_l; //nombre de lignes
+     long long dim_c; //nombre de colonnes
+     long long len_values;  //taille des vecteurs Column et Value
 };
 typedef struct IntCSRMatrix IntCSRMatrix;
 
@@ -42,9 +42,9 @@ struct DoubleCSRMatrix
      int * Row; //vecteur de taille "nombre de lignes + 1" (dim_l + 1)
      int * Column; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
      double * Value; //vecteur de taille len_values = "nombre d'éléments non nuls dans la matrice"
-     long dim_l; //nombre de lignes
-     long dim_c; //nombre de colonnes
-     long len_values; //taille des vecteurs Column et Value
+     long long dim_l; //nombre de lignes
+     long long dim_c; //nombre de colonnes
+     long long len_values; //taille des vecteurs Column et Value
 };
 typedef struct DoubleCSRMatrix DoubleCSRMatrix;
 
@@ -56,24 +56,24 @@ struct MatrixBlock
 {
      int indl; //Indice de ligne du block
      int indc; //Indice de colonne du block
-     long dim_l; //nombre de lignes dans le block
-     long dim_c; //nombre de colonnes dans le block
-     long startRow; //Indice de départ en ligne (inclu)
-     long startColumn; //Indice de départ en colonne (inclu)
-     long endRow; //Indice de fin en ligne (inclu)
-     long endColumn; //Indice de fin en colonne (inclu)
+     long long dim_l; //nombre de lignes dans le block
+     long long dim_c; //nombre de colonnes dans le block
+     long long startRow; //Indice de départ en ligne (inclu)
+     long long startColumn; //Indice de départ en colonne (inclu)
+     long long endRow; //Indice de fin en ligne (inclu)
+     long long endColumn; //Indice de fin en colonne (inclu)
 };
 typedef struct MatrixBlock MatrixBlock;
 
 //structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_coo_brain_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
-     long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
-     long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
+     long long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
+     long long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
      int * types; //vecteur de taille dim_c indiquant le type choisi pour chaque neurones du cerveau
-     long * nb_connections; //vecteur de taille dim_c indiquant le nombre de connections qu'a effectué chaque neurone.
-     long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.
-     long cpt_values; //nombre de connexions (de 1 dans la matrice générée).
+     long long * nb_connections; //vecteur de taille dim_c indiquant le nombre de connections qu'a effectué chaque neurone.
+     long long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.
+     long long cpt_values; //nombre de connexions (de 1 dans la matrice générée).
 };
 typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 
@@ -91,13 +91,13 @@ float random_between_0_and_1()
 --- Opérations sur les cerveaux ---
 ---------------------------------*/
 
-int get_brain_part_ind(long ind, Brain * brain)
+int get_brain_part_ind(long long ind, Brain * brain)
 {
     /*
     Renvoie l'indice de la partie du cerveau dans laquelle le neurone "ind" se situe
     Brain est supposé être un cerveau bien formé et ind est supposé être entre 0 et brain.dimension
     */
-    long * parts_cerv = (*brain).parties_cerveau;
+    long long * parts_cerv = (*brain).parties_cerveau;
     if (ind >= parts_cerv[(*brain).nb_part - 1])
     {
         return (*brain).nb_part - 1;
@@ -131,15 +131,15 @@ int choose_neuron_type(Brain * brain, int part)
 int get_nb_neuron_brain_part(Brain * brain, int part)
 {
     /*Renvoie le nombre de neurones dans la partie d'indice part*/
-    long n = (*brain).dimension;
-    long ind_depart = (*brain).parties_cerveau[part]; //indice de depart auquel commence la partie
+    long long n = (*brain).dimension;
+    long long ind_depart = (*brain).parties_cerveau[part]; //indice de depart auquel commence la partie
     if (part+1 == (*brain).nb_part)
     {
         return n - ind_depart;
     }
     else
     {
-        long ind_fin = (*brain).parties_cerveau[part+1];
+        long long ind_fin = (*brain).parties_cerveau[part+1];
         return ind_fin - ind_depart;
     }
 }
@@ -147,7 +147,7 @@ int get_nb_neuron_brain_part(Brain * brain, int part)
 double get_mean_connect_percentage_for_part(Brain * brain, int part, int type)
 {
     /*Renvoie le pourcentage (entre 0 et 100) de chances de connection moyen pour un neurone de type donné dans une partie donnée, vers les autres parties*/
-    long n,i;
+    long long n,i;
     int nb_part;
     double * probCo = (*brain).brainPart[part].probaConnection; //Proba de connection vers chaque partie
     n = (*brain).dimension;
@@ -167,7 +167,7 @@ void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, i
      Décide des types des neurones numéro "ind_start_neuron" à "ind_start_neuron + nb_neuron" dans le cerveau "Brain", et les écrit dans "types"
      Un malloc de taille nb_neuron * sizeof(int) doit avoir été fait au préalable pour le pointeur "types".
     */
-    long i;
+    long long i;
     int ind_part;
     for (i=0;i<nb_neuron;i++) //parcours des lignes
     {
@@ -182,7 +182,7 @@ void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, i
 --- Opérations sur les matrices ---
 ---------------------------------*/
 
-int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
+int get_csr_matrix_value_int(long long indl, long long indc, IntCSRMatrix * M_CSR)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice M_CSR stockée au format CSR.
@@ -195,8 +195,8 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
     }
-    long i;
-    long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
+    long long i;
+    long long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
         if (Column[i] == indc) {return Value[i];}
@@ -204,7 +204,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
     return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
 }
 
-double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR)
+double get_csr_matrix_value_double(long long indl, long long indc, DoubleCSRMatrix * M_CSR)
 {
     /*
     Renvoie la valeur [indl,indc] de la matrice M_CSR stockée au format CSR.
@@ -217,8 +217,8 @@ double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR
         perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
         return -1;
     }
-    long i;
-    long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
+    long long i;
+    long long nb_values = Row[indl+1] - Row[indl]; //nombre de valeurs dans la ligne
     for (i=Row[indl];i<Row[indl]+nb_values;i++)
     {
         if (Column[i] == indc) {return Value[i];}
@@ -226,10 +226,10 @@ double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR
     return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
 }
 
-long cpt_nb_zeros_matrix(int *M, long long size)
+long long cpt_nb_zeros_matrix(int *M, long long size)
 {
     /*Compte le nombre de 0 dans la matrice M stockée comme un vecteur d'entiers à size elements*/
-    long compteur = 0;
+    long long compteur = 0;
     for (int d=0;d<size;d++)
     {
         if (*(M+d) == 0) {compteur++;}
@@ -261,7 +261,7 @@ void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
     /*
     Normalise la matrice CSR M_CSR sur les colonnes.
     */
-    long i;
+    long long i;
     int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
     matrix_column_sum_vector(sum_vector, M_CSR);
     for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
@@ -274,7 +274,7 @@ void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
 void matrix_vector_product(double *y, double *A, double *x, int n)
 {
     int i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice n*n, y et x doivent être de longueur n*/
+    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice n*n, y et x doivent être de long longueur n*/
     for (i=0;i<n;i++)
     {
         y[i] = 0;
@@ -287,10 +287,10 @@ void matrix_vector_product(double *y, double *A, double *x, int n)
 
 void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
 {
-    long i,j;
+    long long i,j;
     /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice stockée au format CSR, x et y doivent être de talle (*A).dim_c*/
-    long nb_ligne = (*A).dim_l;
-    long nb_col = (*A).dim_c;
+    long long nb_ligne = (*A).dim_l;
+    long long nb_col = (*A).dim_c;
     for (i=0;i<nb_ligne;i++)
     {
         y[i] = 0;
@@ -305,14 +305,14 @@ void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
 
-void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
+void init_row_dense_matrix(int *M, long long i, long long n, int zero_percentage)
 {
     /*
     Rempli n éléments de la ligne i de la matrice M stockée comme un vecteur d'entiers.
     Il y a zero_percentage % de chances que le nombre soit 0.
     Statistiquement, zero_percentage % de la matrice sont des 0 et (100 - zero_percentage) % sont des 1
     */
-    long j;
+    long long j;
 
     for (j=0;j<n;j++)
     {
@@ -336,7 +336,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
 
     Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
     */
-    long i,j,cpt_values,size = BlockInfo.dim_l * BlockInfo.dim_c;
+    long long i,j,cpt_values,size = BlockInfo.dim_l * BlockInfo.dim_c;
     int ind_part_source,ind_part_dest,source_type; double proba_connection,proba_no_connection,random;
     (*M_CSR).dim_l = BlockInfo.dim_l; (*M_CSR).dim_c = BlockInfo.dim_c;
     if (debugInfo != NULL)
@@ -344,7 +344,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
         (*debugInfo).dim_l = BlockInfo.dim_l; (*debugInfo).dim_c = BlockInfo.dim_c;
         (*debugInfo).types = neuron_types;
         //Attention : ces malloc ne sont pas "free" dans la fonction !
-        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
+        (*debugInfo).nb_connections = (long long *)malloc((*debugInfo).dim_c * sizeof(long long));
         for (i=0;i<(*debugInfo).dim_c;i++)
         {
             (*debugInfo).nb_connections[i] = 0;
@@ -354,8 +354,8 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
     //allocations mémoires
     (*M_CSR).Row = (int *)malloc(((*M_CSR).dim_l+1) * sizeof(int));
     //La mémoire allouée pour Column est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
-    long basic_size = (long) size/10;
-    long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
+    long long basic_size = (long long) size/10;
+    long long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
     (*M_CSR).Column = (int *)malloc(total_memory_allocated * sizeof(int));
 
     (*M_CSR).Row[0] = 0;
@@ -413,7 +413,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
     L'allocation mémoire pour CSR_Row (taille dim_l + 1) doit être faite au préalable
     Attention : dim_c, dim_l et len_values ne sont pas modifiés dans le processus, et doivent être remplis au préalable.
     */
-    long i;
+    long long i;
     for (i=0;i<(*M_COO).len_values;i++) //on parcours les vecteurs Column et Value de taille "nombre d'éléments non nuls de la matrice" = len_values
     {
         (*M_CSR).Column[i] = (*M_COO).Column[i];
@@ -422,7 +422,7 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
 
     int * COO_Row = (*M_COO).Row;
     int * CSR_Row = (*M_CSR).Row;
-    long current_indl = 0;
+    long long current_indl = 0;
     *(CSR_Row + current_indl) = 0;
     while(COO_Row[0] != current_indl) //cas particulier : première ligne de la matrice remplie de 0 (<=> indice de la première ligne, 0, différent du premier indice de ligne du vecteur Row)
     {
@@ -513,14 +513,14 @@ int main(int argc, char **argv)
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
-    long i,j,k; //pour les boucles
-    long n;
+    long long i,j,k; //pour les boucles
+    long long n;
     int q = sqrt(p);
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
     int my_indl, my_indc; //indice de ligne et colonne du bloc
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
-    long *nb_connections_local_tmp,*nb_connections_tmp;
+    long long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
+    long long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types;
 
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
@@ -566,7 +566,7 @@ int main(int argc, char **argv)
     }
 
     size = n * n;
-    long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
+    long long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
 
     my_indl = my_rank / nb_blocks_column;
     my_indc = my_rank % nb_blocks_column;
@@ -667,14 +667,14 @@ int main(int argc, char **argv)
         generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
-        nb_connections_local_tmp = (long *)malloc(n * sizeof(long));
+        nb_connections_local_tmp = (long long *)malloc(n * sizeof(long long));
         for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
         for (i=myBlock.startColumn;i<=myBlock.endColumn;i++)
         {
             nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startColumn];
         }
-        nb_connections_tmp = (long *)malloc(n * sizeof(long));
-        MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+        nb_connections_tmp = (long long *)malloc(n * sizeof(long long));
+        MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
         free(nb_connections_local_tmp);
         MatrixDebugInfo.nb_connections = nb_connections_tmp;
         /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
@@ -688,12 +688,12 @@ int main(int argc, char **argv)
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 
     nb_non_zeros_local = A_CSR.len_values;
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
 
     if (debug_cerveau)
     {
         total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
-        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
         MatrixDebugInfo.cpt_values = nb_non_zeros;
 
         if (my_rank == 0)
@@ -728,7 +728,7 @@ int main(int argc, char **argv)
     //Page Rank
     double error_vect,beta;
     double *new_q,*old_q,*tmp;
-    long cpt_iterations = 0;
+    long long cpt_iterations = 0;
     int maxIter = 100000;
     double epsilon = 0.00000000001;
 
@@ -795,7 +795,7 @@ int main(int argc, char **argv)
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
     int partie, type;
-    long nbco;
+    long long nbco;
     double pourcentage_espere, sum_pourcentage_espere;
     if (debug_cerveau)
     {
