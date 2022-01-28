@@ -1,12 +1,21 @@
 # pfe_GtwoML
 Projet de Fin d'Etudes - Polytech IS5
 
+BrainMatrixGenerator :
+- v1 : Génère la matrice d'adjascence d'un cerveau en COO (Parallélisée en blocks de ligne)
+- v2 : Génère la matrice d'adjascence transposée d'un cerveau en COO (Parallélisée en blocks de ligne)
+- v3 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne)
+- v4 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
+
+FichierConfig :
+- convertisseur : Permet de traduire un fichier json contenant les informations sur un cerveau en fichier .h contenant une structure "Cerveau" pouvant être passée en paramètre au générateur.
+
 PageRank :
 - Sequentiel : Code séquentiel en C
 - Parallele :
 	- DemoCerveau : Essais et démonstration des structures (représentant le cerveau) que nous utilisons
-	- PageRankParallele : Programme générant une matrice COO représentant un cerveau (paramétrable), avec ses parties et ses connexions.
-		La matrice est ensuite convertie en CSR puis normalisée sur les colonnes, et un PageRank non pondéré parallèle est appliqué.
+	- PageRankParallele : Programme générant une matrice CSR représentant un cerveau (paramétrable), avec ses parties et ses connexions, parallélisée avec une grille de processus (ligne et colonne).
+		L'algorithme du PageRank non pondéré parallèle est ensuite appliqué sur la matrice générée.
 	- AnyNumberOfCores : Tentative pour régler le cas (problème) où le nombre de processus ne divise pas la dimension n de la matrice.
 
 MethodeDeLaPuissance :
@@ -23,3 +32,7 @@ MatriceCreuse : Essais sur la génération, le stockage et l'accès aux valeurs 
 - DenseToCSR_double : Premier essai - traduction d'une matrice de doubles (stockée normalement) en CSR
 - DenseToCooToCsr : Génération aléatoire d'une matrice stockée normalement, conversion en COO, puis conversion COO -> CSR.
 - CSRMatrixForPageRank : Préparation d'une matrice CSR pour PageRank
+
+TestsMPI :
+- tests_communicateurs : tests sur les communicateurs par ligne et colonne dans une grille de processus 2D MPI. (aide à la compréhension des communicateurs)
+- tests_parallelisation : tests sur la parallélision dans une grille de processus (ligne et colonne) de la génération de la matrice. (aide à la compréhension)
