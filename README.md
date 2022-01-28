@@ -7,8 +7,9 @@ BrainMatrixGenerator :
 - v3 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne)
 - v4 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
 
-FichierConfig :
+Traducteur :
 - convertisseur : Permet de traduire un fichier json contenant les informations sur un cerveau en fichier .h contenant une structure "Cerveau" pouvant être passée en paramètre au générateur.
+- Configs : Contient les fichiers json testés
 
 PageRank :
 - Sequentiel : Code séquentiel en C
