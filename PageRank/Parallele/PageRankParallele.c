@@ -512,7 +512,8 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int complete_debug_cerveau=0; //passer à 1 pour afficher le debug complet du cerveau (neurone par neurone)
     long long i,j,k; //pour les boucles
     long long n;
     int q = sqrt(p);
@@ -805,7 +806,7 @@ int main(int argc, char **argv)
             type = neuron_types[i];
             pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
             nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
-            if (my_rank == 0)
+            if (my_rank == 0 && complete_debug_cerveau)
             {
                 printf("neurone %lli, type: %i, partie: %i, nbconnections: %lli, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
             }
