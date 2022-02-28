@@ -1,5 +1,4 @@
-/* Travail sur un générateur de matrice d'adjascence parallèle avec des blocs de ligne et colonnes. */
-/* En cours */
+/* Générateur de matrice parallèle A (matrice d'adjacence, non transposée) avec des blocs de ligne et colonnes. */
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -86,7 +85,7 @@ struct Brain
 };
 typedef struct Brain Brain;
 
-//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_matrix_for_pagerank"
+//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_adjacency_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
@@ -274,7 +273,7 @@ int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
 --- Fonctions pour génération de matrices ou changement de formats de matrices ---
 --------------------------------------------------------------------------------*/
 
-void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
+void generate_csr_brain_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
     /*
     Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
@@ -297,8 +296,8 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
         (*debugInfo).dim_l = BlockInfo.dim_l; (*debugInfo).dim_c = BlockInfo.dim_c;
         (*debugInfo).types = neuron_types;
         //Attention : ces malloc ne sont pas "free" dans la fonction !
-        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
-        for (i=0;i<(*debugInfo).dim_c;i++)
+        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_l * sizeof(long));
+        for (i=0;i<(*debugInfo).dim_l;i++)
         {
             (*debugInfo).nb_connections[i] = 0;
         }
@@ -315,14 +314,14 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
     cpt_values=0;
     for (i=0;i<BlockInfo.dim_l;i++) //parcours des lignes
     {
-        //récupération de l'indice de la partie (du cerveau) destination
-        ind_part_dest = get_brain_part_ind(BlockInfo.startRow+i, brain);
+        //récupération de l'indice de la partie (du cerveau) source
+        ind_part_source = get_brain_part_ind(BlockInfo.startRow+i, brain);
+        //récupération du type de neurone source
+        source_type = neuron_types[BlockInfo.startRow+i];
         for (j=0;j<BlockInfo.dim_c;j++) //parcours des colonnes
         {
-            //récupération de l'indice de la partie source
-            ind_part_source = get_brain_part_ind(BlockInfo.startColumn+j, brain);
-            //récupération du type de neurone
-            source_type = neuron_types[BlockInfo.startColumn+j];
+            //récupération de l'indice de la partie destination
+            ind_part_dest = get_brain_part_ind(BlockInfo.startColumn+j, brain);
             //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
             proba_no_connection = 1 - proba_connection;
@@ -339,7 +338,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
                 (*M_CSR).Column[cpt_values] = j;
                 if (debugInfo != NULL)
                 {
-                    (*debugInfo).nb_connections[j] = (*debugInfo).nb_connections[j] + 1;
+                    (*debugInfo).nb_connections[i] = (*debugInfo).nb_connections[i] + 1;
                 }
                 cpt_values++;
             }
@@ -559,35 +558,24 @@ int main(int argc, char **argv)
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+        generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         nb_connections_local_tmp = (long *)malloc(n * sizeof(long)); //réecriture des informations de débug sur le nombre de connexion dans un vecteur de taille n (dimension de la matrice) aux indices correspondants, pour allreduce
         for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
-        for (i=myBlock.startColumn;i<=myBlock.endColumn;i++)
+        for (i=myBlock.startRow;i<=myBlock.endRow;i++)
         {
-            nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startColumn]; //prise en compte du décalage colonne (pour écrire aux indices qui correspondent aux neurones dans la matrice globale)
+            nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startRow]; //prise en compte du décalage ligne (pour écrire aux indices qui correspondent aux neurones dans la matrice globale)
         }
         nb_connections_tmp = (long *)malloc(n * sizeof(long));
-        /*DEL*/for (k=0;k<p;k++){MPI_Barrier(MPI_COMM_WORLD); if (my_rank == k){
-        /*DEL*/printf("vecteur nb_connections_local_tmp dans processus %i :\n",my_rank);
-        /*DEL*/for (i=0;i<n;i++)
-        /*DEL*/{
-        /*DEL*/    printf("%li ",nb_connections_local_tmp[i]);
-        /*DEL*/} printf("\n");}}
         MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-        /*DEL*/if (my_rank == 0){printf("Vecteur nb_connections_tmp :\n");
-        /*DEL*/for (i=0;i<n;i++)
-        /*DEL*/{
-        /*DEL*/    printf("%li ",nb_connections_tmp[i]);
-        /*DEL*/} printf("\n");}
         free(nb_connections_local_tmp);
         MatrixDebugInfo.nb_connections = nb_connections_tmp;
         /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
     }
     else
     {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+        generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
     }
 
     total_time = my_gettimeofday() - start_time;

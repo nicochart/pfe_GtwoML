@@ -85,7 +85,7 @@ struct Brain
 };
 typedef struct Brain Brain;
 
-//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_matrix_for_pagerank"
+//structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_transposed_adjacency_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
@@ -312,7 +312,7 @@ void generate_coo_matrix_for_pagerank(IntCOOMatrix *M_COO, MatrixBlock BlockInfo
     (*M_COO).len_values = cpt_values;
 }
 
-void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
+void generate_csr_brain_transposed_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
     /*
     Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
@@ -597,7 +597,7 @@ int main(int argc, char **argv)
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+        generate_csr_brain_transposed_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         nb_connections_local_tmp = (long *)malloc(n * sizeof(long)); //réecriture des informations de débug sur le nombre de connexion dans un vecteur de taille n (dimension de la matrice) aux indices correspondants, pour allreduce
@@ -625,7 +625,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+        generate_csr_brain_transposed_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
     }
 
     total_time = my_gettimeofday() - start_time;
