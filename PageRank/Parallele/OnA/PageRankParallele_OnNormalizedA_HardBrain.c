@@ -1,5 +1,5 @@
-/*PageRank non pondéré parallele utilisant pour l'instant le générateur V4 (Matrice parallèle avec blocks sur les ligne et les colonnes)*/
-/*Ce fichier sera modifié pour utiliser le générateur V5 (matrice d'adjascence) et appliquer le pagerank directement dessus*/
+/*Ce programme utilise le générateur V5 (Matrice d'adjacence A non transposée parallèle avec blocks sur les ligne et les colonnes)*/
+/*Un PageRank non-pondéré est appliqué directement sur la matrice A, une fois normalisée*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>

@@ -2,11 +2,11 @@
 Projet de Fin d'Etudes - Polytech IS5
 
 BrainMatrixGenerator :
-- v1 : Génère la matrice d'adjascence d'un cerveau en COO (Parallélisée en blocks de ligne)
-- v2 : Génère la matrice d'adjascence transposée d'un cerveau en COO (Parallélisée en blocks de ligne)
-- v3 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne)
-- v4 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
-- v5 : Génère la matrice d'adjascence d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
+- v1 : Génère la matrice d'adjacence d'un cerveau en COO (Parallélisée en blocks de ligne)
+- v2 : Génère la matrice d'adjacence transposée d'un cerveau en COO (Parallélisée en blocks de ligne)
+- v3 : Génère la matrice d'adjacence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne)
+- v4 : Génère la matrice d'adjacence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
+- v5 : Génère la matrice d'adjacence d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
 
 Traducteur :
 - convertisseur : Permet de traduire un fichier json contenant les informations sur un cerveau en fichier .h contenant une structure "Cerveau" pouvant être passée en paramètre au générateur.
@@ -16,10 +16,14 @@ PageRank :
 - Sequentiel : Code séquentiel en C
 - Parallele :
 	- DemoCerveau : Essais et démonstration des structures (représentant le cerveau) que nous utilisons
-	- PageRankParallele : Programme générant une matrice CSR représentant un cerveau (paramétrable), avec ses parties et ses connexions, parallélisée avec une grille de processus (ligne et colonne).
+	- On transposed and normalized A (matrice générée transposée directement, générateur v4)
+		- PageRankParallele : Programme générant une matrice CSR représentant un cerveau (paramétrable), avec ses parties et ses connexions, parallélisée avec une grille de processus (ligne et colonne).
 		L'algorithme du PageRank non pondéré parallèle est ensuite appliqué sur la matrice générée.
-	- AnyNumberOfCores : Tentative pour régler le cas (problème) où le nombre de processus ne divise pas la dimension n de la matrice.
-	- EfficientMatrixVectorMul : travail sur un algorithme du PageRank plus optimisé, en travaillent directement sur la matrice d'adjascence A.
+		- AnyNumberOfCores : Tentative pour régler le cas (problème) où le nombre de processus ne divise pas la dimension n de la matrice.
+		- EfficientMatrixVectorMul : travail sur un algorithme du PageRank plus optimisé, en travaillent directement sur la matrice d'adjascence A.
+	- On A (utilisation du générateur V5, A non transposé)
+		- PageRankParallele_OnNormalizedA : Algorithme du PageRank appliqué à la matrice A normalisée sur les lignes
+		- PageRankParallele_EffMVMul : futur algorithme plus optimisé, sans normalisation nécéssaire
 
 MethodeDeLaPuissance :
 - Sequential : Code séquentiel
