@@ -6,6 +6,7 @@ BrainMatrixGenerator :
 - v2 : Génère la matrice d'adjascence transposée d'un cerveau en COO (Parallélisée en blocks de ligne)
 - v3 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne)
 - v4 : Génère la matrice d'adjascence transposée d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
+- v5 : Génère la matrice d'adjascence d'un cerveau en CSR (Parallélisée en blocks de ligne et colonne, dans une grille de processus)
 
 Traducteur :
 - convertisseur : Permet de traduire un fichier json contenant les informations sur un cerveau en fichier .h contenant une structure "Cerveau" pouvant être passée en paramètre au générateur.
@@ -18,6 +19,7 @@ PageRank :
 	- PageRankParallele : Programme générant une matrice CSR représentant un cerveau (paramétrable), avec ses parties et ses connexions, parallélisée avec une grille de processus (ligne et colonne).
 		L'algorithme du PageRank non pondéré parallèle est ensuite appliqué sur la matrice générée.
 	- AnyNumberOfCores : Tentative pour régler le cas (problème) où le nombre de processus ne divise pas la dimension n de la matrice.
+	- EfficientMatrixVectorMul : travail sur un algorithme du PageRank plus optimisé, en travaillent directement sur la matrice d'adjascence A.
 
 MethodeDeLaPuissance :
 - Sequential : Code séquentiel

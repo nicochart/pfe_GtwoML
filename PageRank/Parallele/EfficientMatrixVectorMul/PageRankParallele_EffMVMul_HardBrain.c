@@ -258,40 +258,6 @@ long cpt_nb_zeros_matrix(int *M, long long size)
     return compteur;
 }
 
-void matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Ecrit dans sum_vector (vecteur de taille (*M_CSR).dim_c) la somme des éléments colonne par colonne de la matrice à l'adresse M_CSR.
-    Chaque case d'indice i du sum_vector contiendra la somme des éléments de la colonne du même indice i.
-    L'allocation mémoire du vecteur sum_vector doit être faite au préalable.
-    */
-    int i;
-    for (i=0;i<(*M_CSR).dim_c;i++) //initialisation du vecteur sum_vector
-    {
-        *(sum_vector+i) = 0;
-    }
-
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
-    {
-        *(sum_vector + (*M_CSR).Column[i]) += (*M_CSR).Value[i];
-    }
-}
-
-void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Normalise la matrice CSR M_CSR sur les colonnes.
-    */
-    long i;
-    int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
-    matrix_column_sum_vector(sum_vector, M_CSR);
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
-    {
-        (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
-    }
-    free(sum_vector);
-}
-
 void normalize_matrix_on_rows(DoubleCSRMatrix * M_CSR, MatrixBlock BlockInfo, long * row_sum_vector)
 {
     /*
@@ -549,9 +515,9 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=1; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
-    int debug_print_matrix=1; //passer à 1 pour afficher les matrices dans les processus
+    int debug=0; //passer à 1 pour afficher les print de débuggage
+    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
     long i,j,k; //pour les boucles
     long n;
     int q = sqrt(p);
@@ -825,7 +791,7 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
 
     //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc_local,sc,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
+    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
 
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
@@ -893,6 +859,39 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
+
+    //affichage matrices
+    if (debug_print_matrix)
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (my_rank == 0) {printf("-------- Matrices:\n");}
+        MPI_Barrier(MPI_COMM_WORLD);
+        for (k=0;k<p;k++)
+        {
+            MPI_Barrier(MPI_COMM_WORLD);
+            if (my_rank == k)
+            {
+                printf("Matrice du processus %i :\n",my_rank);
+                for (i=0;i<myBlock.dim_l;i++)
+                {
+                    if (nb_ligne<=20 && nb_colonne <=20) //si la dimension de la matrice est inférieur ou égale à 32, on peut l'afficher
+                    {
+                        for (j=0;j<myBlock.dim_c;j++)
+                        {
+                            printf("%f ", get_csr_matrix_value_double(i, j, &P_CSR));
+                        }
+                        printf("\n");
+                    }
+                }
+                if (nb_ligne>20 || nb_colonne>20)
+                {
+                    printf("trop grande pour être affichée\n");
+                }
+            }
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     int partie, type;
     long nbco;
