@@ -92,7 +92,7 @@ struct DebugBrainMatrixInfo
      long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
      long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
      int * types; //vecteur de taille dim_c indiquant le type choisi pour chaque neurones du cerveau
-     long * nb_connections; //vecteur de taille dim_c indiquant le nombre de connections qu'a effectué chaque neurone.
+     long * nb_connections; //vecteur de taille dim_c en sortie du générateur, et de taille n (dimension totale de la matrice) après communications, indiquant le nombre de connections qu'a effectué chaque neurone.
      long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.
      long cpt_values; //nombre de connexions (de 1 dans la matrice générée).
 };
@@ -292,6 +292,23 @@ void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
     free(sum_vector);
 }
 
+void normalize_matrix_on_rows(DoubleCSRMatrix * M_CSR, MatrixBlock BlockInfo, long * row_sum_vector)
+{
+    /*
+    Normalise la matrice parallèle CSR M_CSR, stockée en parallèle, sur les lignes.
+    Les lignes dans la matrice (complète) doivent être de longueur matrix_dim_c
+    Le vecteur row_sum_vector doit contenir le nombre d'éléments sur chaque ligne (vecteur de longueur matrix_dim_l).
+    */
+    long i,j;
+    for(i=0; i<(*M_CSR).dim_l; i++) //parcours du vecteur row
+    {
+        for (j=(*M_CSR).Row[i]; j<(*M_CSR).Row[i+1]; j++) //parcours du vecteur column
+        {
+            (*M_CSR).Value[j] = 1.0/row_sum_vector[BlockInfo.startRow+i];
+        }
+    }
+}
+
 void matrix_vector_product(double *y, double *A, double *x, int n)
 {
     int i,j;
@@ -342,7 +359,7 @@ void init_row_dense_matrix(int *M, long i, long n, int zero_percentage)
     }
 }
 
-void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
+void generate_csr_brain_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
     /*
     Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
@@ -365,8 +382,8 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
         (*debugInfo).dim_l = BlockInfo.dim_l; (*debugInfo).dim_c = BlockInfo.dim_c;
         (*debugInfo).types = neuron_types;
         //Attention : ces malloc ne sont pas "free" dans la fonction !
-        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
-        for (i=0;i<(*debugInfo).dim_c;i++)
+        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_l * sizeof(long));
+        for (i=0;i<(*debugInfo).dim_l;i++)
         {
             (*debugInfo).nb_connections[i] = 0;
         }
@@ -383,14 +400,14 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
     cpt_values=0;
     for (i=0;i<BlockInfo.dim_l;i++) //parcours des lignes
     {
-        //récupération de l'indice de la partie (du cerveau) destination
-        ind_part_dest = get_brain_part_ind(BlockInfo.startRow+i, brain);
+        //récupération de l'indice de la partie (du cerveau) source
+        ind_part_source = get_brain_part_ind(BlockInfo.startRow+i, brain);
+        //récupération du type de neurone source
+        source_type = neuron_types[BlockInfo.startRow+i];
         for (j=0;j<BlockInfo.dim_c;j++) //parcours des colonnes
         {
-            //récupération de l'indice de la partie source
-            ind_part_source = get_brain_part_ind(BlockInfo.startColumn+j, brain);
-            //récupération du type de neurone
-            source_type = neuron_types[BlockInfo.startColumn+j];
+            //récupération de l'indice de la partie destination
+            ind_part_dest = get_brain_part_ind(BlockInfo.startColumn+j, brain);
             //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
             proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
             proba_no_connection = 1 - proba_connection;
@@ -407,7 +424,7 @@ void generate_csr_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock Blo
                 (*M_CSR).Column[cpt_values] = j;
                 if (debugInfo != NULL)
                 {
-                    (*debugInfo).nb_connections[j] = (*debugInfo).nb_connections[j] + 1;
+                    (*debugInfo).nb_connections[i] = (*debugInfo).nb_connections[i] + 1;
                 }
                 cpt_values++;
             }
@@ -532,8 +549,9 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=0; //passer à 1 pour afficher les print de débuggage
+    int debug=1; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_print_matrix=1; //passer à 1 pour afficher les matrices dans les processus
     long i,j,k; //pour les boucles
     long n;
     int q = sqrt(p);
@@ -745,27 +763,20 @@ int main(int argc, char **argv)
 
     //Génération de la matrice CSR à partir du cerveau
     struct DebugBrainMatrixInfo MatrixDebugInfo;
-    if (debug_cerveau)
-    {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+    generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
-        /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
-        nb_connections_local_tmp = (long *)malloc(n * sizeof(long));
-        for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
-        for (i=myBlock.startColumn;i<=myBlock.endColumn;i++)
-        {
-            nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startColumn];
-        }
-        nb_connections_tmp = (long *)malloc(n * sizeof(long));
-        MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-        free(nb_connections_local_tmp);
-        MatrixDebugInfo.nb_connections = nb_connections_tmp;
-        /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
-    }
-    else
+    /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
+    nb_connections_local_tmp = (long *)malloc(n * sizeof(long)); //réecriture des informations de débug sur le nombre de connexion dans un vecteur de taille n (dimension de la matrice) aux indices correspondants, pour allreduce
+    for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
+    for (i=myBlock.startRow;i<=myBlock.endRow;i++)
     {
-        generate_csr_brain_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+        nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startRow]; //prise en compte du décalage ligne (pour écrire aux indices qui correspondent aux neurones dans la matrice globale)
     }
+    nb_connections_tmp = (long *)malloc(n * sizeof(long));
+    MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    free(nb_connections_local_tmp);
+    MatrixDebugInfo.nb_connections = nb_connections_tmp;
+    /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
 
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
@@ -773,16 +784,14 @@ int main(int argc, char **argv)
     nb_non_zeros_local = A_CSR.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
 
-    if (debug_cerveau)
-    {
-        total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
-        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
-        MatrixDebugInfo.cpt_values = nb_non_zeros;
+    //debug
+    total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
+    MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+    MatrixDebugInfo.cpt_values = nb_non_zeros;
 
-        if (my_rank == 0)
-        {
-            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
-        }
+    if (debug_cerveau && my_rank == 0)
+    {
+        printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
     }
 
     //matrice normalisée format CSR :
@@ -796,7 +805,7 @@ int main(int argc, char **argv)
     //copie du vecteur Value dans NormValue
     for(i=0;i<nb_non_zeros_local;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
     //normalisation de la matrice
-    normalize_matrix_on_columns(&P_CSR);
+    normalize_matrix_on_rows(&P_CSR, myBlock, MatrixDebugInfo.nb_connections);
 
     if (debug && nb_non_zeros <= 256)
     {
@@ -816,7 +825,7 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
 
     //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc_local,sc,morceau_new_q[nb_ligne];
+    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc_local,sc,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
 
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
@@ -826,6 +835,7 @@ int main(int argc, char **argv)
     for (i=0;i<n;i++) {new_q[i] = (double) 1/n;}
 
     MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0) {printf("Running PageRank..\n");}
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
 
     while (error_vect > epsilon && !one_in_vector(new_q,n) && cpt_iterations<maxIter)
@@ -839,28 +849,35 @@ int main(int argc, char **argv)
         sum_totale_old_q = tmp_sum;
         //-- itération sur new_q --
 
+        //réinitialisation morceau_new_q_local pour nouvelle ittération
+        for (i=0; i<nb_colonne; i++)
+        {
+            morceau_new_q_local[i] = 0;
+        }
+
         // calcul du produit matrice-vecteur new_q= P * old_q et de la somme des carrés total
         sum_new_q = 0;
         for(i=0; i<nb_ligne; i++)
         {
-            sc_local = 0; //scalaire "local" (on doit les additionner sur les lignes pour l'avoir au complet)
             for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
             {
-                sc_local += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
+                morceau_new_q_local[P_CSR.Column[j]] += P_CSR.Value[j] * old_q[myBlock.startRow + i]; //Produit matrice-vecteur local
             }
-            MPI_Allreduce(&sc_local, &sc, 1, MPI_DOUBLE, MPI_SUM, ROW_COMM); //Somme sur les lignes des scalaires
-            //étape 1 : new_q = beta * P.old_q
-            morceau_new_q[i] = beta * sc; //new_q[i] = beta * ligneP[i] * old_q
-            //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
-            to_add = sum_totale_old_q * (1-beta)/n; //sum_total_old_q contient déjà la somme des éléments de old_q
-            morceau_new_q[i] = morceau_new_q[i] + to_add;
-            sum_new_q  += sc;
-        }
-        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+            MPI_Allreduce(morceau_new_q_local, morceau_new_q, nb_colonne, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q sur les colonnes
 
-        MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, COLUMN_COMM); //récupération par colonne des morceaux de new_q dans new_q, dans tout les processus
+            to_add = sum_totale_old_q * (1-beta)/n; //sum_total_old_q contient déjà la somme des éléments de old_q
+            for (k=0; k<nb_colonne; k++)
+            {
+                morceau_new_q[k] = morceau_new_q[k] * beta + to_add; //étape 1 et 2 : new_q = beta * P.old_q + norme(old_q) * (1-beta) / n
+                sum_new_q += morceau_new_q[k]; //stockage de la somme du vecteur q (locale)  pour l'ittération suivante
+            }
+        }
+        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, ROW_COMM); //somme MPI_SUM sur les lignes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+
         //étape 3 : normalisation de q
-        for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
+        for (i=0;i<nb_colonne;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;}
+
+        MPI_Allgather(morceau_new_q, nb_colonne, MPI_DOUBLE, new_q, nb_colonne,  MPI_DOUBLE, ROW_COMM); //récupération par ligne des morceaux de new_q dans new_q, dans tout les processus
 
         //-- fin itération--
         if (debug && my_rank==0)
