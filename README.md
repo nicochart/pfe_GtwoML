@@ -23,7 +23,7 @@ PageRank :
 		- EfficientMatrixVectorMul : travail sur un algorithme du PageRank plus optimisé, en travaillent directement sur la matrice d'adjascence A.
 	- On A (utilisation du générateur V5, A non transposé)
 		- PageRankParallele_OnNormalizedA : Algorithme du PageRank appliqué à la matrice A normalisée sur les lignes
-		- PageRankParallele_EffMVMul : futur algorithme plus optimisé, sans normalisation nécéssaire
+		- PageRankParallele_EffMVMul : algorithme plus optimisé, sans normalisation nécéssaire
 
 MethodeDeLaPuissance :
 - Sequential : Code séquentiel

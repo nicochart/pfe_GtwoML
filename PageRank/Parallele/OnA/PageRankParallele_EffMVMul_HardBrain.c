@@ -1,5 +1,5 @@
-/*PageRank non pondéré parallele utilisant le générateur V5 (Matrice d'adjacence générée parallèle avec blocks sur les ligne et les colonnes)*/
-/*Ce programme sera optimisé pour utiliser directement la matrice A sans la normaliser*/
+/*PageRank non pondéré (plus optimité) parallele utilisant le générateur V5 (Matrice d'adjacence générée parallèle avec blocks sur les ligne et les colonnes)*/
+/*Le PageRank est appliqué directement avec la matrice générée. (Pas besoin de la normaliser)*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -760,29 +760,6 @@ int main(int argc, char **argv)
         printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
     }
 
-    //matrice normalisée format CSR :
-    //1 ALLOCATION : allocation mémoire pour le vecteur CSR_Row_Normé (doubles) qui sera différent de CSR_Row (entiers). Le reste est commun.
-    struct DoubleCSRMatrix P_CSR;
-    P_CSR.len_values = nb_non_zeros_local; //nombre de zéro local
-    P_CSR.dim_l = A_CSR.dim_l;
-    P_CSR.dim_c = A_CSR.dim_c;
-    P_CSR.Value = (double *)malloc(nb_non_zeros_local * sizeof(double));
-    P_CSR.Column = A_CSR.Column; P_CSR.Row = A_CSR.Row; //vecteurs Column et Row communs
-    //copie du vecteur Value dans NormValue
-    for(i=0;i<nb_non_zeros_local;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
-    //normalisation de la matrice
-    normalize_matrix_on_rows(&P_CSR, myBlock, MatrixDebugInfo.nb_connections);
-
-    if (debug && nb_non_zeros <= 256)
-    {
-        printf("\nVecteur P_CSR.Row dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.dim_l+1;i++) {printf("%i ",P_CSR.Row[i]);}printf("\n");
-        printf("Vecteur P_CSR.Column dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.len_values;i++) {printf("%i ",P_CSR.Column[i]);}printf("\n");
-        printf("Vecteur P_CSR.Value dans my_rank=%i:\n",my_rank);
-        for(i=0;i<P_CSR.len_values;i++) {printf("%.2f ",P_CSR.Value[i]);}printf("\n");
-    }
-
     //Page Rank
     double error_vect,beta;
     double *new_q,*old_q,*tmp;
@@ -791,7 +768,7 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
 
     //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
+    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
 
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
@@ -825,9 +802,10 @@ int main(int argc, char **argv)
         sum_new_q = 0;
         for(i=0; i<nb_ligne; i++)
         {
-            for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
+            sc = old_q[myBlock.startRow + i] / (A_CSR.Row[i+1] - A_CSR.Row[i]);
+            for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++)
             {
-                morceau_new_q_local[P_CSR.Column[j]] += P_CSR.Value[j] * old_q[myBlock.startRow + i]; //Produit matrice-vecteur local
+                morceau_new_q_local[A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
             }
             MPI_Allreduce(morceau_new_q_local, morceau_new_q, nb_colonne, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q sur les colonnes
 
@@ -878,7 +856,7 @@ int main(int argc, char **argv)
                     {
                         for (j=0;j<myBlock.dim_c;j++)
                         {
-                            printf("%f ", get_csr_matrix_value_double(i, j, &P_CSR));
+                            printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
                         }
                         printf("\n");
                     }
@@ -941,7 +919,6 @@ int main(int argc, char **argv)
     free(new_q); free(old_q);
     free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
-    free(P_CSR.Value); //Row et Column communs avec la matrice CSR
 
     if (debug_cerveau)
     {
