@@ -769,6 +769,7 @@ int main(int argc, char **argv)
 
     //variables temporaires pour code parallèle
     double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc,morceau_new_q_local[nb_colonne],morceau_new_q[nb_colonne];
+    int nb_elements_ligne;
 
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
@@ -802,7 +803,8 @@ int main(int argc, char **argv)
         sum_new_q = 0;
         for(i=0; i<nb_ligne; i++)
         {
-            sc = old_q[myBlock.startRow + i] / (A_CSR.Row[i+1] - A_CSR.Row[i]);
+            nb_elements_ligne = MatrixDebugInfo.nb_connections[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
+            sc = old_q[myBlock.startRow + i] / (double) nb_elements_ligne;
             for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++)
             {
                 morceau_new_q_local[A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
