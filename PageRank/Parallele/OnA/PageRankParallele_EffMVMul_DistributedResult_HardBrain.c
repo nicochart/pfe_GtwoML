@@ -519,6 +519,7 @@ int main(int argc, char **argv)
     int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
+    int debug_print_full_pagerank_result=1; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
     long n;
     int q = sqrt(p);
@@ -839,6 +840,13 @@ int main(int argc, char **argv)
     total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
+    double *pagerank_result;
+    if (debug_print_full_pagerank_result)
+    {
+        pagerank_result = (double *)malloc(n * sizeof(double));
+        MPI_Allgather(morceau_new_q, nb_colonne, MPI_DOUBLE, pagerank_result, nb_colonne, MPI_DOUBLE, COLUMN_COMM); //récupération par colonne des morceaux de new_q dans new_q, dans tout les processus
+    }
+
     //affichage matrices
     if (debug_print_matrix)
     {
@@ -895,7 +903,13 @@ int main(int argc, char **argv)
         }
     }
 
-    if (my_rank == 0)
+    if (my_rank == 0 && debug_print_full_pagerank_result)
+    {
+        printf("\nRésultat ");
+        for(i=0;i<n;i++) {printf("%.4f ",pagerank_result[i]);}
+        printf("obtenu en %i itérations\n",cpt_iterations);
+    }
+    else if (my_rank == 0)
     {
         if ((debug && debug_cerveau) || n <= 64)
         {
