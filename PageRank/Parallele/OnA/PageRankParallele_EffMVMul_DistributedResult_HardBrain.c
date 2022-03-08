@@ -530,6 +530,10 @@ int main(int argc, char **argv)
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types;
 
+    double grid_dim_factor;
+    int local_result_vector_size_blocks;
+    long local_result_vector_size;
+
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
 
     if (argc < 2)
@@ -564,6 +568,19 @@ int main(int argc, char **argv)
     size = n * n;
     long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
 
+    if (nb_ligne * nb_blocks_row != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les lignes (%i)\n",n,nb_blocks_row);}
+    }
+    if (nb_colonne * nb_blocks_column != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les colonnes (%i)\n",n,nb_blocks_column);}
+    }
+    if (nb_ligne * nb_blocks_row != n || nb_colonne * nb_blocks_column != n)
+    {
+        exit(1);
+    }
+    
     my_indl = my_rank / nb_blocks_column;
     my_indc = my_rank % nb_blocks_column;
     struct MatrixBlock myBlock;
