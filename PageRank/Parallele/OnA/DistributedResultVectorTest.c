@@ -29,6 +29,7 @@ struct MatrixBlock
      int result_vector_group; //Indice de groupe de calcul du vecteur résultat
      int indc_in_result_vector_group; //Indice de ligne du block dans le groupe de calcul du vecteur résultat
      long startColumn_in_result_vector_group; //Indice de départ en ligne dans le groupe de calcul du vecteur résultat (inclu)
+     int my_result_vector_group_rank; //my_rank dans le groupe de calcul du vecteur résultat
 };
 typedef struct MatrixBlock MatrixBlock;
 
@@ -146,6 +147,7 @@ int main(int argc, char **argv)
     myBlock.result_vector_group = myBlock.indc / local_result_vector_size_blocks;
     myBlock.indc_in_result_vector_group = myBlock.indc % local_result_vector_size_blocks;
     myBlock.startColumn_in_result_vector_group = nb_colonne * myBlock.indc_in_result_vector_group;
+    myBlock.my_result_vector_group_rank = myBlock.indc_in_result_vector_group + myBlock.indl * local_result_vector_size_blocks;
 
     if (my_rank == 0)
     {
@@ -162,6 +164,46 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
     }
 
+    if (my_rank == 0) {printf("\nTests de communication\n\n");}
+
+    n=10;
+    int *vector,*vector_local;
+    vector = (int *)malloc(n * sizeof(int));
+    vector_local = (int *)malloc(n * sizeof(int));
+
+    MPI_Comm RV_GROUP_COMM;
+    MPI_Comm_split(MPI_COMM_WORLD, myBlock.result_vector_group, myBlock.my_result_vector_group_rank, &RV_GROUP_COMM);
+
+    for (i=0;i<n;i++)
+    {
+        if (myBlock.indc < nb_blocks_column / 2)
+        {
+            vector_local[i] = 1;
+        }
+        else
+        {
+            vector_local[i] = 2;
+        }
+    }
+
+    MPI_Allreduce(vector_local, vector, n, MPI_INT, MPI_SUM, RV_GROUP_COMM); //Reduce du vecteur_local dans le vecteur
+
+    for (k=0;k<p;k++)
+    {
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (my_rank == k && myBlock.my_result_vector_group_rank == 0)
+        {
+            printf("[my_rank = %i] vector dans le groupe de vecteur résultat %i :",my_rank,myBlock.result_vector_group);
+              for (i=0;i<n;i++)
+                {
+                    printf(" %i",vector[i]);
+                } printf("\n");
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    free(vector); free(vector_local);
     MPI_Finalize();
     return 0;
 }
