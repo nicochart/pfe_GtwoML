@@ -26,6 +26,9 @@ struct MatrixBlock
      long endColumn; //Indice de fin en colonne (inclu)
 
      int pr_result_redistribution_root; //Indice de colonne du block "root" (source) de la communication-redistribution du vecteur résultat
+     int result_vector_group; //Indice de groupe de calcul du vecteur résultat
+     int indc_in_result_vector_group; //Indice de ligne du block dans le groupe de calcul du vecteur résultat
+     long startColumn_in_result_vector_group; //Indice de départ en ligne dans le groupe de calcul du vecteur résultat (inclu)
 };
 typedef struct MatrixBlock MatrixBlock;
 
@@ -54,7 +57,7 @@ int main(int argc, char **argv)
     MPI_Init(&argc,&argv);
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-    
+
     long i,j,k; //pour les boucles
     long n;
     int q = sqrt(p);
@@ -64,7 +67,6 @@ int main(int argc, char **argv)
     double grid_dim_factor;
     int local_result_vector_size_blocks;
     long local_result_vector_size;
-    int result_vector_group;
 
     if (argc < 2)
     {
@@ -97,6 +99,19 @@ int main(int argc, char **argv)
 
     long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
 
+    if (nb_ligne * nb_blocks_row != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les lignes (%i)\n",n,nb_blocks_row);}
+    }
+    if (nb_colonne * nb_blocks_column != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les colonnes (%i)\n",n,nb_blocks_column);}
+    }
+    if (nb_ligne * nb_blocks_row != n || nb_colonne * nb_blocks_column != n)
+    {
+        exit(1);
+    }
+
     my_indl = my_rank / nb_blocks_column;
     my_indc = my_rank % nb_blocks_column;
     struct MatrixBlock myBlock;
@@ -128,7 +143,9 @@ int main(int argc, char **argv)
     myBlock.pr_result_redistribution_root = (int) myBlock.indl / grid_dim_factor;
     local_result_vector_size_blocks = nb_blocks_column / pgcd(nb_blocks_row, nb_blocks_column);
     local_result_vector_size = local_result_vector_size_blocks * nb_colonne;
-    result_vector_group = myBlock.indc / local_result_vector_size_blocks;
+    myBlock.result_vector_group = myBlock.indc / local_result_vector_size_blocks;
+    myBlock.indc_in_result_vector_group = myBlock.indc % local_result_vector_size_blocks;
+    myBlock.startColumn_in_result_vector_group = nb_colonne * myBlock.indc_in_result_vector_group;
 
     if (my_rank == 0)
     {
@@ -140,7 +157,7 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         if (my_rank == k)
         {
-            printf("[my_rank = %i]: Result Vector Group = %i ; Root redistrib Result Vector : %i,%i\n",my_rank,result_vector_group,myBlock.indl,myBlock.pr_result_redistribution_root);
+            printf("[my_rank = %i]: Result Vector Group = %i ; IndStartColumn in Result Vector Group : %i (Block), %li (Element) ; Root redistrib Result Vector : %i,%i\n",my_rank,myBlock.result_vector_group,myBlock.indc_in_result_vector_group,myBlock.startColumn_in_result_vector_group,myBlock.indl,myBlock.pr_result_redistribution_root);
         }
         MPI_Barrier(MPI_COMM_WORLD);
     }
