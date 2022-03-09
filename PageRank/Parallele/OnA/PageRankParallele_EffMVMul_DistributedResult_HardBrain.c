@@ -534,10 +534,11 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &p);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    int debug=1; //passer à 1 pour afficher les print de débuggage
+    int debug=0; //passer à 1 pour afficher les print de débuggage
+    int debug_matrix_block=1; //passer à 1 pour afficher les print de débuggage du block de matrice
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
-    int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
-    int debug_pagerank=1; //passer à 1 pour afficher les débugs du pagerank
+    int debug_print_matrix=1; //passer à 1 pour afficher les matrices dans les processus
+    int debug_pagerank=0; //passer à 1 pour afficher les débugs du pagerank
     int debug_print_full_pagerank_result=1; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
     long n;
@@ -646,12 +647,12 @@ int main(int argc, char **argv)
         printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
     }
 
-    if (my_rank == 0 && debug) //débuggage du vecteur résultat
+    if (my_rank == 0 && debug_matrix_block) //débuggage du vecteur résultat
     {
-        printf("Taille locale du vecteur résultat : %i blocks colonne, soit %li cases mémoire\nFacteur nb_blocks_row/nb_blocks_column = %i/%i = %f\n\n",local_result_vector_size_column_blocks,local_result_vector_size_column,nb_blocks_row,nb_blocks_column,grid_dim_factor);
+        printf("Taille locale du vecteur résultat : %i blocks colonne, soit %li cases mémoire\nFacteur nb_blocks_row/nb_blocks_column = %i/%i = %f, pgcd = %i\n\n",local_result_vector_size_column_blocks,local_result_vector_size_column,nb_blocks_row,nb_blocks_column,grid_dim_factor,pgcd(nb_blocks_row, nb_blocks_column));
     }
     MPI_Barrier(MPI_COMM_WORLD);
-    if (debug) //debuggage des groupes de calcul du vecteur résultat (PageRank)
+    if (debug_matrix_block) //debuggage des groupes de calcul du vecteur résultat (PageRank)
     {
         for (k=0;k<p;k++)
         {
@@ -843,6 +844,13 @@ int main(int argc, char **argv)
     double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc;
     int nb_elements_ligne;
 
+    //utilisé uniquement si debug_pagerank est activé
+    double *q_global;
+    if (debug_pagerank)
+    {
+        q_global = (double *)malloc(n * sizeof(double));
+    }
+
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
     //allocation mémoire pour old_q et new_q, et initialisation de new_q
@@ -850,6 +858,7 @@ int main(int argc, char **argv)
     morceau_new_q_local = (double *)malloc(local_result_vector_size_column * sizeof(double));
     morceau_old_q = (double *)malloc(local_result_vector_size_column * sizeof(double));
     for (i=0;i<local_result_vector_size_column;i++) {morceau_new_q[i] = (double) 1/n;}
+    sum_totale_new_q = n;
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0) {printf("Running PageRank..\n");}
@@ -857,7 +866,7 @@ int main(int argc, char **argv)
 
     while (error_vect > epsilon && !one_in_vector(morceau_new_q,local_result_vector_size_column) && cpt_iterations<maxIter)
     {
-        if (my_rank == 0 && debug) {printf("Itération %i\n",cpt_iterations);}
+        if (my_rank == 0 /*&& debug*/) {printf("Itération %i, error = %f\n",cpt_iterations,error_vect);}
         //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
         tmp = morceau_new_q;
         morceau_new_q = morceau_old_q;
@@ -868,6 +877,7 @@ int main(int argc, char **argv)
         //-- itération sur new_q --
 
         //réinitialisation morceau_new_q_local pour nouvelle ittération
+        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
         for (i=0; i<local_result_vector_size_column; i++)
         {
             morceau_new_q_local[i] = 0;
@@ -883,27 +893,56 @@ int main(int argc, char **argv)
             {
                 morceau_new_q_local[myBlock.startColumn_in_result_vector_group + A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
             }
-            MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
 
-            to_add = sum_totale_old_q * (1-beta)/n; //sum_total_old_q contient déjà la somme des éléments de old_q
-            for (k=0; k<nb_colonne; k++)
+            for (k=myBlock.startColumn_in_result_vector_group; k<myBlock.startColumn_in_result_vector_group+nb_colonne; k++)
             {
-                morceau_new_q[k] = morceau_new_q[k] * beta + to_add; //étape 1 et 2 : new_q = beta * P.old_q + norme(old_q) * (1-beta) / n
+                morceau_new_q_local[k] = morceau_new_q_local[k] * beta + to_add; //au fibal new_q = beta * P.old_q + norme(old_q) * (1-beta) / n    (la partie droite du + étant ajoutée à l'initialisation)
             }
         }
 
-        if (debug_pagerank && myBlock.indc == myBlock.pr_result_redistribution_root) {printf("Communication du processus root=%i (indice %i dans le communicateur) vers les autres de la même ligne de %i éléments du nouveau vecteur q\n", myBlock.indl * nb_blocks_column + myBlock.indl,myBlock.pr_result_redistribution_root,local_result_vector_size_column);}
+        if (debug_pagerank && my_rank % nb_blocks_column == 0)
+        {
+            printf("(%i,%i) rank %i, morceau q local avant reduce : ",myBlock.indl,myBlock.indc,my_rank);
+            for(k=0;k<local_result_vector_size_column;k++) {printf("%.2f ",morceau_new_q_local[k]);}
+            printf(", le to_add était de %f\n",to_add);
+        }
+
+        MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        if (debug_pagerank && my_rank % nb_blocks_column == 0)
+        {
+            printf("(%i,%i) rank %i, morceau q local après reduce : ",myBlock.indl,myBlock.indc,my_rank);
+            for(k=0;k<local_result_vector_size_column;k++) {printf("%.2f ",morceau_new_q[k]);}
+            printf("\n");
+        }
+
+        //if (debug_pagerank && myBlock.indc == myBlock.pr_result_redistribution_root) {printf("Communication du processus root=%i (indice %i dans le communicateur) vers les autres de la même ligne de %i éléments du nouveau vecteur q\n", myBlock.indl * nb_blocks_column + myBlock.indl,myBlock.pr_result_redistribution_root,local_result_vector_size_column);}
         MPI_Bcast(morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, myBlock.pr_result_redistribution_root, ROW_COMM); //chaque processus d'une s"ligne de processus" (dans la grille) contient le même morceau de new_q
+        MPI_Barrier(MPI_COMM_WORLD);
 
         //étape 3 : normalisation de q
         for (i=0;i<local_result_vector_size_column;i++) {sum_new_q += morceau_new_q[i];}
-        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
         for (i=0;i<local_result_vector_size_column;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;} //normalisation avec sum totale (tout processus confondu)
 
         //-- fin itération--
         cpt_iterations++;
         error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne); //calcul de l'erreur local
-        MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
+        MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        //debug
+        if (debug_pagerank)
+        {
+            MPI_Allgather(morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, q_global, local_result_vector_size_column, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans q_global, dans tout les processus
+            if (my_rank == 0)
+            {
+                printf("q actuel : ");
+                for(i=0;i<n;i++) {printf("%.2f ",q_global[i]);}
+                printf("\n");
+            }
+        }
     }
     //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
 
@@ -915,7 +954,7 @@ int main(int argc, char **argv)
     if (debug_print_full_pagerank_result)
     {
         pagerank_result = (double *)malloc(n * sizeof(double));
-        MPI_Allgather(morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, pagerank_result, local_result_vector_size_column, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans new_q, dans tout les processus
+        MPI_Allgather(morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, pagerank_result, local_result_vector_size_column, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans pagerank_result, dans tout les processus
     }
 
     //affichage matrices
@@ -1002,6 +1041,7 @@ int main(int argc, char **argv)
         printf("Temps total écoulé : %.1f s\n", total_time);
     }
 
+    if (debug_pagerank) {free(q_global);}
     if (debug_print_full_pagerank_result) {free(pagerank_result);}
     free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
     free(neuron_types);
