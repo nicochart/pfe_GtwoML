@@ -537,6 +537,7 @@ int main(int argc, char **argv)
     int debug=1; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
+    int debug_pagerank=1; //passer à 1 pour afficher les débugs du pagerank
     int debug_print_full_pagerank_result=1; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
     long n;
@@ -647,7 +648,7 @@ int main(int argc, char **argv)
 
     if (my_rank == 0 && debug) //débuggage du vecteur résultat
     {
-        printf("Taille locale du vecteur résultat : %i blocks, soit %li cases mémoire\nFacteur nb_blocks_row/nb_blocks_column = %i/%i = %f\n\n",local_result_vector_size_column_blocks,local_result_vector_size_column,nb_blocks_row,nb_blocks_column,grid_dim_factor);
+        printf("Taille locale du vecteur résultat : %i blocks colonne, soit %li cases mémoire\nFacteur nb_blocks_row/nb_blocks_column = %i/%i = %f\n\n",local_result_vector_size_column_blocks,local_result_vector_size_column,nb_blocks_row,nb_blocks_column,grid_dim_factor);
     }
     MPI_Barrier(MPI_COMM_WORLD);
     if (debug) //debuggage des groupes de calcul du vecteur résultat (PageRank)
@@ -733,7 +734,7 @@ int main(int argc, char **argv)
     Cerveau.parties_cerveau = part_cerv;
     Cerveau.brainPart = brainPart;
 
-    if (my_rank == 0)
+    if (my_rank == 0 && debug_cerveau)
     {
       printf("\n#############\nRecap de votre cerveau :\n");
 
@@ -778,18 +779,18 @@ int main(int argc, char **argv)
     //choix du type de neurone pour chaque neurone du cerveau
     if (myBlock.indc == 0) //choix des processus qui vont définir les types de neurones
     {
-        if (debug) {printf("Le processus %i répond à l'appel, il va s'occuper des neurones %li à %li\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
+        if (debug_cerveau) {printf("Le processus %i répond à l'appel de définition des types de neurone, il va s'occuper des neurones %li à %li\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
         generate_neuron_types(&Cerveau, myBlock.indl*nb_ligne, nb_ligne, neuron_types + myBlock.indl*nb_ligne);
     }
 
     for (i=0;i<nb_blocks_row;i++)
     {
-        if (my_rank==0 && debug) {printf("Communication du processus %i vers les autres de %i neurones\n",i*nb_blocks_column,nb_ligne);}
+        if (my_rank==0 && debug_cerveau) {printf("Communication du processus %i vers les autres de %i neurones\n",i*nb_blocks_column,nb_ligne);}
         MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    if (my_rank==0 && debug)
+    if (my_rank==0 && debug_cerveau)
     {
         for (i=0;i<n;i++)
         {
@@ -835,7 +836,7 @@ int main(int argc, char **argv)
     double error_vect,error_vect_local,beta;
     double *morceau_new_q,*morceau_new_q_local,*morceau_old_q,*tmp;
     long cpt_iterations = 0;
-    int maxIter = 100000;
+    int maxIter = 10000;
     double epsilon = 0.00000000001;
 
     //variables temporaires pour code parallèle
@@ -891,7 +892,7 @@ int main(int argc, char **argv)
             }
         }
 
-        if (debug && myBlock.indc == myBlock.pr_result_redistribution_root) {printf("Communication du processus root=%i (indice %i dans le communicateur) vers les autres de la même ligne de %i éléments du nouveau vecteur q\n", myBlock.indl * nb_blocks_column + myBlock.indl,myBlock.pr_result_redistribution_root,local_result_vector_size_column);}
+        if (debug_pagerank && myBlock.indc == myBlock.pr_result_redistribution_root) {printf("Communication du processus root=%i (indice %i dans le communicateur) vers les autres de la même ligne de %i éléments du nouveau vecteur q\n", myBlock.indl * nb_blocks_column + myBlock.indl,myBlock.pr_result_redistribution_root,local_result_vector_size_column);}
         MPI_Bcast(morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, myBlock.pr_result_redistribution_root, ROW_COMM); //chaque processus d'une s"ligne de processus" (dans la grille) contient le même morceau de new_q
 
         //étape 3 : normalisation de q
@@ -1001,6 +1002,7 @@ int main(int argc, char **argv)
         printf("Temps total écoulé : %.1f s\n", total_time);
     }
 
+    if (debug_print_full_pagerank_result) {free(pagerank_result);}
     free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
     free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
