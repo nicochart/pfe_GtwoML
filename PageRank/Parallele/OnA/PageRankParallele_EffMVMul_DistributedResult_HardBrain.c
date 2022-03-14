@@ -65,11 +65,12 @@ struct MatrixBlock
      long endColumn; //Indice de fin en colonne (inclu)
 
      int pr_result_redistribution_root; //Indice de colonne du block "root" (source) de la communication-redistribution du vecteur résultat
-     int result_vector_group; //Indice de groupe de calcul du vecteur résultat
+     int result_vector_calculation_group; //Indice de groupe de calcul du vecteur résultat
      int indc_in_result_vector_calculation_group; //Indice de colonne du block dans le groupe de calcul du vecteur résultat (groupes de blocks colonnes)
      int inter_result_vector_need_group_communicaton_group; //Indice du Groupe de communication inter-groupe de besoin (utile pour récupérer le résultat final)
-     long startColumn_in_result_vector_group; //Indice de départ en ligne dans le groupe de calcul du vecteur résultat (inclu)
-     int my_result_vector_group_rank; //my_rank dans le groupe de calcul du vecteur résultat
+     long startColumn_in_result_vector_calculation_group; //Indice de départ en colonne dans le groupe de calcul du vecteur résultat (inclu)
+     long startRow_in_result_vector_calculation_group; //Indice de départ en ligne dans le groupe de calcul du vecteur résultat (inclu), utile dans le PageRank pour aller chercher des valeurs dans le vecteur q
+     int my_result_vector_calculation_group_rank; //my_rank dans le groupe de calcul du vecteur résultat
 };
 typedef struct MatrixBlock MatrixBlock;
 
@@ -537,7 +538,7 @@ int main(int argc, char **argv)
     int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_matrix_block=1; //passer à 1 pour afficher les print de débuggage du block de matrice
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
-    int debug_print_matrix=1; //passer à 1 pour afficher les matrices dans les processus
+    int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
     int debug_pagerank=0; //passer à 1 pour afficher les débugs du pagerank
     int debug_print_full_pagerank_result=1; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
@@ -619,11 +620,12 @@ int main(int argc, char **argv)
     local_result_vector_size_column_blocks = nb_blocks_column / pgcd(nb_blocks_row, nb_blocks_column);
     local_result_vector_size_row_blocks = nb_blocks_row / pgcd(nb_blocks_row, nb_blocks_column);
     local_result_vector_size_column = local_result_vector_size_column_blocks * nb_colonne;
-    myBlock.result_vector_group = myBlock.indc / local_result_vector_size_column_blocks;
+    myBlock.result_vector_calculation_group = myBlock.indc / local_result_vector_size_column_blocks;
     myBlock.indc_in_result_vector_calculation_group = myBlock.indc % local_result_vector_size_column_blocks;
     myBlock.inter_result_vector_need_group_communicaton_group = (myBlock.indl % local_result_vector_size_row_blocks) * nb_blocks_column + myBlock.indc;
-    myBlock.startColumn_in_result_vector_group = nb_colonne * myBlock.indc_in_result_vector_calculation_group;
-    myBlock.my_result_vector_group_rank = myBlock.indc_in_result_vector_calculation_group + myBlock.indl * local_result_vector_size_column_blocks;
+    myBlock.startColumn_in_result_vector_calculation_group = nb_colonne * myBlock.indc_in_result_vector_calculation_group;
+    myBlock.startRow_in_result_vector_calculation_group = nb_ligne * myBlock.indl % local_result_vector_size_row_blocks;
+    myBlock.my_result_vector_calculation_group_rank = myBlock.indc_in_result_vector_calculation_group + myBlock.indl * local_result_vector_size_column_blocks;
 
     /* Communicateurs par ligne et colonne */
     MPI_Comm ROW_COMM;
@@ -634,7 +636,7 @@ int main(int argc, char **argv)
 
     /* Communicateurs par groupe de calcul et de besoin du vecteur résultat (PageRank) */
     MPI_Comm RV_CALC_GROUP_COMM; //communicateur interne des groupes (qui regroupe sur les colonnes les blocks du même groupe de calcul)
-    MPI_Comm_split(MPI_COMM_WORLD, myBlock.result_vector_group, myBlock.my_result_vector_group_rank, &RV_CALC_GROUP_COMM);
+    MPI_Comm_split(MPI_COMM_WORLD, myBlock.result_vector_calculation_group, myBlock.my_result_vector_calculation_group_rank, &RV_CALC_GROUP_COMM);
 
     MPI_Comm INTER_RV_NEED_GROUP_COMM; //communicateur externe des groupes de besoin (groupes sur les lignes) ; permet de récupérer le résultat final
     MPI_Comm_split(MPI_COMM_WORLD, myBlock.inter_result_vector_need_group_communicaton_group, my_rank, &INTER_RV_NEED_GROUP_COMM);
@@ -658,7 +660,7 @@ int main(int argc, char **argv)
         {
             MPI_Barrier(MPI_COMM_WORLD);
             if (my_rank == k)
-                {printf("[my_rank = %i]: Result Vector Group = %i ; IndStartColumn in Result Vector Group : %i (Block), %li (Element) ; Inter-RVNeedGroup Communicator rank : %i ; Root redistrib Result Vector : %i,%i\n",my_rank,myBlock.result_vector_group,myBlock.indc_in_result_vector_calculation_group,myBlock.startColumn_in_result_vector_group,myBlock.inter_result_vector_need_group_communicaton_group,myBlock.indl,myBlock.pr_result_redistribution_root);}
+                {printf("[my_rank = %i]: Result Vector Group = %i ; IndStartColumn in Result Vector Group : %i (Block), %li (Element) ; Inter-RVNeedGroup Communicator rank : %i ; Root redistrib Result Vector : %i,%i\n",my_rank,myBlock.result_vector_calculation_group,myBlock.indc_in_result_vector_calculation_group,myBlock.startColumn_in_result_vector_calculation_group,myBlock.inter_result_vector_need_group_communicaton_group,myBlock.indl,myBlock.pr_result_redistribution_root);}
         }
     }
 
@@ -888,19 +890,19 @@ int main(int argc, char **argv)
         for(i=0; i<nb_ligne; i++)
         {
             nb_elements_ligne = MatrixDebugInfo.nb_connections[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
-            sc = morceau_old_q[myBlock.startColumn_in_result_vector_group + i] / (double) nb_elements_ligne;
+            sc = morceau_old_q[myBlock.startRow_in_result_vector_calculation_group + i] / (double) nb_elements_ligne;
             for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++)
             {
-                morceau_new_q_local[myBlock.startColumn_in_result_vector_group + A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
+                morceau_new_q_local[myBlock.startColumn_in_result_vector_calculation_group + A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
             }
 
-            for (k=myBlock.startColumn_in_result_vector_group; k<myBlock.startColumn_in_result_vector_group+nb_colonne; k++)
+            for (k=myBlock.startColumn_in_result_vector_calculation_group; k<myBlock.startColumn_in_result_vector_calculation_group+nb_colonne; k++)
             {
                 morceau_new_q_local[k] = morceau_new_q_local[k] * beta + to_add; //au fibal new_q = beta * P.old_q + norme(old_q) * (1-beta) / n    (la partie droite du + étant ajoutée à l'initialisation)
             }
         }
 
-        if (debug_pagerank && my_rank % nb_blocks_column == 0)
+        if (/*debug_pagerank && my_rank % nb_blocks_column*/ debug_pagerank && myBlock.result_vector_calculation_group == 0)
         {
             printf("(%i,%i) rank %i, morceau q local avant reduce : ",myBlock.indl,myBlock.indc,my_rank);
             for(k=0;k<local_result_vector_size_column;k++) {printf("%.2f ",morceau_new_q_local[k]);}
@@ -910,7 +912,7 @@ int main(int argc, char **argv)
         MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size_column, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (debug_pagerank && my_rank % nb_blocks_column == 0)
+        if (/*debug_pagerank && my_rank % nb_blocks_column*/ debug_pagerank && myBlock.result_vector_calculation_group == 0)
         {
             printf("(%i,%i) rank %i, morceau q local après reduce : ",myBlock.indl,myBlock.indc,my_rank);
             for(k=0;k<local_result_vector_size_column;k++) {printf("%.2f ",morceau_new_q[k]);}
