@@ -22,9 +22,13 @@ PageRank :
 		- AnyNumberOfCores : Tentative pour régler le cas (problème) où le nombre de processus ne divise pas la dimension n de la matrice.
 		- EfficientMatrixVectorMul : travail sur un algorithme du PageRank plus optimisé, en travaillent directement sur la matrice d'adjascence A.
 	- On A (utilisation du générateur V5, A non transposé)
-		- PageRankParallele_OnNormalizedA : Algorithme du PageRank appliqué à la matrice A normalisée sur les lignes
-		- PageRankParallele_EffMVMul : algorithme plus optimisé, sans normalisation nécéssaire
-		- PageRankParallele_EffMVMul_DistributedResult_HardBrain : algorithme plus optimisé, avec vecteur résultat réparti sur les processus
+		Dernières versions :
+			- PageRankParallele_DistributedRV_HardBrain : algorithme plus optimisé, appliqué à la matrice A directement, sans multiplications, avec vecteur résultat réparti sur les processus
+			- PageRankParallele_DistributedRV_HardBrain_OpenMP : Même chose avec OpenMP
+		Plus anciennes versions :
+			- PageRankParallele_OnNormalizedA : Algorithme du PageRank appliqué à la matrice A normalisée sur les lignes
+			- PageRankParallele_EffMVMul : algorithme plus optimisé, sans normalisation nécéssaire
+		Le fichier .pdf explique comment fonctionne l'algorithme PageRankParallele_DistributedRV_HardBrain. Le dossier "Tests" contient des fichiers avec des prints permettant de mieux comprendre comment est réparti le vecteur résultat.
 
 MethodeDeLaPuissance :
 - Sequential : Code séquentiel
