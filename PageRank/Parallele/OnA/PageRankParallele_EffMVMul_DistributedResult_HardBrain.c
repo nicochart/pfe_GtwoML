@@ -9,6 +9,7 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+#include <omp.h>
 
 #define NULL ((void *)0)
 
@@ -485,10 +486,11 @@ double vector_norm(double *vect, int size)
     return sum;
 }
 
-double abs_two_vector_error(double *vect1, double *vect2, int size)
+double abs_two_vector_error(double *vect1, double *vect2, int size, int nbThreadProcessus)
 {
     /*Calcul l'erreur entre deux vecteurs de taille "size"*/
     double sum=0;
+    #pragma omp parallel for num_threads(nbThreadProcessus) reduction(+ : sum) schedule(static)
     for (int i=0;i<size;i++) {sum += fabs(vect1[i] - vect2[i]);}
     return sum;
 }
@@ -540,7 +542,7 @@ int main(int argc, char **argv)
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
     int debug_pagerank=0; //passer à 1 pour afficher les débugs du pagerank
-    int debug_print_full_pagerank_result=1; //passer à 1 pour allgather et afficher le vecteur résultat complet
+    int debug_print_full_pagerank_result=0; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
     long n;
     int q = sqrt(p);
@@ -557,6 +559,8 @@ int main(int argc, char **argv)
     long local_result_vector_size_column;
 
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
+
+    int nbThreadProcessus = 2; //12 ou 48 sur Fugaku ??
 
     if (argc < 2)
     {
@@ -859,6 +863,7 @@ int main(int argc, char **argv)
     morceau_new_q = (double *)malloc(local_result_vector_size_column * sizeof(double));
     morceau_new_q_local = (double *)malloc(local_result_vector_size_column * sizeof(double));
     morceau_old_q = (double *)malloc(local_result_vector_size_column * sizeof(double));
+    #pragma omp parallel for num_threads(nbThreadProcessus) schedule(static)
     for (i=0;i<local_result_vector_size_column;i++) {morceau_new_q[i] = (double) 1/n;}
     sum_totale_new_q = n;
 
@@ -880,6 +885,7 @@ int main(int argc, char **argv)
 
         //réinitialisation morceau_new_q_local pour nouvelle ittération
         to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
+        #pragma omp parallel for num_threads(nbThreadProcessus) schedule(static)
         for (i=0; i<local_result_vector_size_column; i++)
         {
             morceau_new_q_local[i] = 0;
@@ -924,13 +930,15 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
 
         //étape 3 : normalisation de q
+        #pragma omp parallel for num_threads(nbThreadProcessus) reduction(+ : sum_new_q) schedule(static)
         for (i=0;i<local_result_vector_size_column;i++) {sum_new_q += morceau_new_q[i];}
         MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+        #pragma omp parallel for num_threads(nbThreadProcessus) schedule(static)
         for (i=0;i<local_result_vector_size_column;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;} //normalisation avec sum totale (tout processus confondu)
 
         //-- fin itération--
         cpt_iterations++;
-        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne); //calcul de l'erreur local
+        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne,nbThreadProcessus); //calcul de l'erreur local
         MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -995,24 +1003,21 @@ int main(int argc, char **argv)
     int partie, type;
     long nbco;
     double pourcentage_espere, sum_pourcentage_espere;
-    if (debug_cerveau)
+    for(i=0;i<n;i++) // Parcours des neurones
     {
-        for(i=0;i<n;i++) // Parcours des neurones
+        partie = get_brain_part_ind(i, &Cerveau);
+        type = neuron_types[i];
+        pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
+        nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
+        if (my_rank == 0 && debug_cerveau)
         {
-            partie = get_brain_part_ind(i, &Cerveau);
-            type = neuron_types[i];
-            pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
-            nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
-            if (my_rank == 0)
-            {
-                printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
-            }
-            sum_pourcentage_espere += pourcentage_espere;
+            printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
         }
-        if (my_rank==0)
-        {
-            printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
-        }
+        sum_pourcentage_espere += pourcentage_espere;
+    }
+    if (my_rank==0)
+    {
+        printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
     }
 
     if (my_rank == 0 && debug_print_full_pagerank_result)
