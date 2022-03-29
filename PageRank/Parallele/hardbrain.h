@@ -4,7 +4,7 @@
 #define hardbrain
 
 #ifndef brainstruct
-#include "../../../BrainMatrixGenerator/brainstruct.h"
+#include "../../BrainMatrixGenerator/brainstruct.h"
 #endif
 
 //Cerveau écrit en brute (nombre de partie = 8, nombre de neurone égal dans chaque partie)

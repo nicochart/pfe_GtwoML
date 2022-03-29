@@ -198,3 +198,177 @@ void generate_csr_brain_transposed_adjacency_matrix_for_pagerank(IntCSRMatrix *M
     (*M_CSR).len_values = cpt_values;
     for (i=0; i<cpt_values;i++) {(*M_CSR).Value[i] = 1;}
 }
+
+/*V3 : CSR row blocks*/
+void generate_csr_row_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
+{
+    /*
+    Génère aléatoirement la matrice creuse (pointeur M_CSR, format CSR), pour PageRank, correspondant à un cerveau passé en paramètre.
+    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
+    Attention : on suppose brain.dimension = c
+    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
+    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
+    Le pourcentage de valeurs (1 ou 0) dans la matrice est choisi en fonction du cerveau "brain" passé en paramètre.
+
+    debugInfo est un pointeur vers une structure de débuggage.
+    Si ce paramètre est à NULL, aucune information de débuggage n'est écrite.
+    Si on écrit des informations de débuggage, deux malloc de plus sont fait.
+
+    Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
+    */
+    long i,j,cpt_values,size=l*c;
+    int ind_part_source,ind_part_dest,source_type; double proba_connection,proba_no_connection,random;
+    (*M_CSR).dim_l = l; (*M_CSR).dim_c = c;
+    if (debugInfo != NULL)
+    {
+        (*debugInfo).dim_l = l; (*debugInfo).dim_c = c;
+        (*debugInfo).types = neuron_types;
+        //Attention : ces malloc ne sont pas "free" dans la fonction !
+        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
+        for (i=0;i<(*debugInfo).dim_c;i++)
+        {
+            (*debugInfo).nb_connections[i] = 0;
+        }
+    }
+
+    //allocations mémoires
+    (*M_CSR).Row = (int *)malloc(((*M_CSR).dim_l+1) * sizeof(int));
+    //La mémoire allouée pour Column est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
+    long basic_size = (long) size/10;
+    long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
+    (*M_CSR).Column = (int *)malloc(total_memory_allocated * sizeof(int));
+
+    (*M_CSR).Row[0] = 0;
+    cpt_values=0;
+    for (i=0;i<l;i++) //parcours des lignes
+    {
+        //récupération de l'indice de la partie (du cerveau) destination
+        ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
+        for (j=0;j<c;j++) //parcours des colonnes
+        {
+            //récupération de l'indice de la partie source
+            ind_part_source = get_brain_part_ind(j, brain);
+            //récupération du type de neurone
+            source_type = neuron_types[j];
+            //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
+            proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
+            proba_no_connection = 1 - proba_connection;
+            random = random_between_0_and_1();
+            //décision aléatoire, en prenant en compte l'abscence de connexion sur la diagonale de façon brute
+            if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
+            {
+                if (cpt_values >= total_memory_allocated)
+                {
+                    total_memory_allocated *= 2;
+                    (*M_CSR).Column = (int *) realloc((*M_CSR).Column, total_memory_allocated * sizeof(int));
+                    assert((*M_CSR).Column != NULL);
+                }
+                (*M_CSR).Column[cpt_values] = j;
+                if (debugInfo != NULL)
+                {
+                    (*debugInfo).nb_connections[j] = (*debugInfo).nb_connections[j] + 1;
+                }
+                cpt_values++;
+            }
+        }
+        (*M_CSR).Row[i+1] = cpt_values;
+    }
+    //remplissage de la structure de débuggage
+    if (debugInfo != NULL)
+    {
+        (*debugInfo).total_memory_allocated = total_memory_allocated;
+        (*debugInfo).cpt_values = cpt_values;
+    }
+    //remplissage du vecteur Value (avec précisement le nombre de 1 nécéssaire)
+    (*M_CSR).Value = (int *)malloc(cpt_values * sizeof(int));
+    (*M_CSR).len_values = cpt_values;
+    for (i=0; i<cpt_values;i++) {(*M_CSR).Value[i] = 1;}
+}
+
+/*V2 : COO row blocks*/
+void generate_coo_row_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
+{
+    /*
+    Génère aléatoirement la matrice creuse (pointeur M_COO, format COO), pour PageRank, correspondant à un cerveau passé en paramètre.
+    l et c sont les nombres de ligne et nombre de colonnes de la matrice, ils seront stockés dans dim_l et dim_c
+    neuron_types est un pointeur vers un vecteur d'entiers de taille c correspondant aux types de chaque neurones.
+    Attention : on suppose brain.dimension = c
+    ind_start_row est, dans le cas où on génère la matrice par morceaux, l'indice de la ligne (dans la matrice complète) où le morceau commence.
+    Ce dernier indice permet de remplir la diagonale de la matrice de 0 (pour PageRank : un site ne peut pas être relié à lui même)
+    Le pourcentage de valeurs (1 ou 0) dans la matrice est choisi en fonction du cerveau "brain" passé en paramètre.
+
+    debugInfo est un pointeur vers une structure de débuggage.
+    Si ce paramètre est à NULL, aucune information de débuggage n'est écrite.
+    Si on écrit des informations de débuggage, deux malloc de plus sont fait.
+
+    Attention : La mémoire pour les vecteurs Row, Column et Value est allouée dans la fonction, mais n'est pas libérée dans la fonction.
+    */
+    long i,j,cpt_values,size=l*c;
+    int ind_part_source,ind_part_dest,source_type; double proba_connection,proba_no_connection,random;
+    (*M_COO).dim_l = l; (*M_COO).dim_c = c;
+    if (debugInfo != NULL)
+    {
+        (*debugInfo).dim_l = l; (*debugInfo).dim_c = c;
+        (*debugInfo).types = neuron_types;
+        //Attention : ces malloc ne sont pas "free" dans la fonction !
+        (*debugInfo).nb_connections = (long *)malloc((*debugInfo).dim_c * sizeof(long));
+        for (i=0;i<(*debugInfo).dim_c;i++)
+        {
+            (*debugInfo).nb_connections[i] = 0;
+        }
+    }
+
+    //La mémoire allouée est à la base de 1/10 de la taille de la matrice stockée "normalement". Au besoin, on réalloue de la mémoire dans le code.
+    long basic_size = (long) size/10;
+    long total_memory_allocated = basic_size; //nombre total de cases mémoires allouées pour 1 vecteur
+    (*M_COO).Row = (int *)malloc(total_memory_allocated * sizeof(int));
+    (*M_COO).Column = (int *)malloc(total_memory_allocated * sizeof(int));
+
+    cpt_values=0;
+    for (i=0;i<l;i++) //parcours des lignes
+    {
+        //récupération de l'indice de la partie (du cerveau) destination
+        ind_part_dest = get_brain_part_ind(ind_start_row+i, brain);
+        for (j=0;j<c;j++) //parcours des colonnes
+        {
+            //récupération de l'indice de la partie source
+            ind_part_source = get_brain_part_ind(j, brain);
+            //récupération du type de neurone
+            source_type = neuron_types[j];
+            //récupération de la probabilité de connexion source -> destination avec le type de neurone donné
+            proba_connection = (*brain).brainPart[ind_part_source].probaConnection[source_type*(*brain).nb_part + ind_part_dest];
+            proba_no_connection = 1 - proba_connection;
+            random = random_between_0_and_1();
+            //décision aléatoire, en prenant en compte l'abscence de connexion sur la diagonale de façon brute
+            if ( (ind_start_row+i)!=j && random > proba_no_connection) //si on est dans la proba de connexion et qu'on est pas dans la diagonale, alors on place un 1
+            {
+                if (cpt_values >= total_memory_allocated)
+                {
+                    total_memory_allocated *= 2;
+                    (*M_COO).Row = (int *) realloc((*M_COO).Row, total_memory_allocated * sizeof(int));
+                    (*M_COO).Column = (int *) realloc((*M_COO).Column, total_memory_allocated * sizeof(int));
+                    assert((*M_COO).Row != NULL);
+                    assert((*M_COO).Column != NULL);
+                }
+                (*M_COO).Row[cpt_values] = i;
+                (*M_COO).Column[cpt_values] = j;
+                if (debugInfo != NULL)
+                {
+                    (*debugInfo).nb_connections[j] = (*debugInfo).nb_connections[j] + 1;
+                }
+                cpt_values++;
+            }
+        }
+    }
+    //remplissage de la structure de débuggage
+    if (debugInfo != NULL)
+    {
+        (*debugInfo).total_memory_allocated = total_memory_allocated;
+        (*debugInfo).cpt_values = cpt_values;
+    }
+    //remplissage du vecteur Value (avec précisement le nombre de 1 nécéssaire)
+    (*M_COO).Value = (int *)malloc(cpt_values * sizeof(int));
+    (*M_COO).len_values = cpt_values;
+    for (i=0; i<cpt_values;i++) {(*M_COO).Value[i] = 1;}
+}

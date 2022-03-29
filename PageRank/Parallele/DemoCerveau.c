@@ -6,26 +6,11 @@
 #include <time.h>
 #include <math.h>
 
-/*----------------------------------------------------------------------
---- Structure contenant les informations d'un cerveau et ses parties ---
-----------------------------------------------------------------------*/
 
-struct BrainPart
-{
-     int nbTypeNeuron;
-     double * repartitionNeuronCumulee; //taille nbTypeNeuron
-     double * probaConnection; //taille (ligne) nbTypeNeuron * (colonne) nb_part
-};
-typedef struct BrainPart BrainPart;
-
-struct Brain
-{
-     int dimension; //nombre de neurones total
-     int nb_part; //nombre de parties
-     int * parties_cerveau; //taille nb_part - indices de 0 à n (dimension de la matrice) auxquels commencent les parties du cerveau
-     BrainPart * brainPart; //taille nb_part - adresse d'un vecteur de pointeurs vers des BrainPart.
-};
-typedef struct Brain Brain;
+//Structure contenant les informations d'un cerveau et ses parties
+#ifndef brainstruct
+#include "../../BrainMatrixGenerator/brainstruct.h"
+#endif
 
 int main(int argc, char **argv)
 {
@@ -35,7 +20,7 @@ int main(int argc, char **argv)
     printf("Entrez le nombre de parties que contiendra votre cerveau : ",i);
     scanf("%d", &nb_part);
 
-    int * part_cerv = (int *)malloc(nb_part * sizeof(int));
+    long * part_cerv = (long *)malloc(nb_part * sizeof(long));
     int ind_brainpart;
     printf("Entrez les indices auxquels chaque partie du cerveau vont commencer (0 à n=%i croissants):\n",n);
     for (i=0;i<nb_part;i++)
