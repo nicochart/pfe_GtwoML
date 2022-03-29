@@ -137,3 +137,49 @@ void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, i
         types[i] = choose_neuron_type(brain, ind_part);
     }
 }
+
+void printf_recap_brain(Brain * brain)
+{
+    int i,j,k;
+    /*affiche un récapitulatif du cerveau passé en paramètre.*/
+    printf("\n#############\nRecap de votre cerveau :\n");
+
+    printf("Taille : %i*%i\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",(*brain).dimension,(*brain).dimension,(*brain).nb_part);
+    for (i=0; i<(*brain).nb_part; i++)
+    {
+        printf("%i ",(*brain).parties_cerveau[i]);
+    }
+    printf("]\n\n");
+    for (i=0; i<(*brain).nb_part; i++)
+    {
+        printf("\n");
+        printf("Partie %i :\n\tNombre de types de neurones : %i\n\t",i,(*brain).brainPart[i].nbTypeNeuron);
+        printf("Probabilités cumulées d'appartenir à chaque type de neurone : [");
+        for (j=0;j<(*brain).brainPart[i].nbTypeNeuron;j++)
+        {
+            printf("%lf ",(*brain).brainPart[i].repartitionNeuronCumulee[j]);
+        }
+        printf("]\n\tConnexions :\n\t");
+        for (j=0;j<(*brain).brainPart[i].nbTypeNeuron;j++)
+        {
+            printf("Connexions du type de neurone d'indice %i :\n\t",j);
+            for (k=0;k<(*brain).nb_part;k++)
+            {
+                printf("%i -> %i : %lf\n\t",i,k,(*brain).brainPart[i].probaConnection[j*(*brain).nb_part + k]);
+            }
+        }
+    }
+    printf("\n");
+}
+
+void free_brain(Brain * brain)
+{
+    /*libère les ressources allouées dans un cerveau. Ne libère/détruit pas le cerveau.*/
+    for (int i=0; i<(*brain).nb_part; i++)
+    {
+        free((*brain).brainPart[i].repartitionNeuronCumulee);
+        free((*brain).brainPart[i].probaConnection);
+    }
+    free((*brain).brainPart);
+    free((*brain).parties_cerveau);
+}

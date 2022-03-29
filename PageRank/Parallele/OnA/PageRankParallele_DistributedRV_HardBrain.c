@@ -9,7 +9,9 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+
 #include "pagerank_includes.h"
+#include "../hardbrain.h"
 
 #define NULL ((void *)0)
 
@@ -276,111 +278,9 @@ int main(int argc, char **argv)
         }
     }
 
-    //Cerveau écrit en brute (pour essayer)
-    int nbTypeNeuronIci,nb_part=8;
-    BrainPart brainPart[nb_part];
-    long part_cerv[nb_part];
-    long nb_neurone_par_partie = n / nb_part;
-    if (nb_part * nb_neurone_par_partie != n) {printf("Veuillez entrer un n multiple de %i svp\n",nb_part); exit(1);}
-    for (i=0; i<nb_part; i++)
-    {
-        part_cerv[i] = i*nb_neurone_par_partie;
-    }
-    //partie 1
-    nbTypeNeuronIci = 2;
-    double repNCumulee1[2] = {0.5, 1};
-    double probCo1[16] = {/*type 1*/0.1, 0.4, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.4, 0.2, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[0].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[0].repartitionNeuronCumulee = repNCumulee1;
-    brainPart[0].probaConnection = probCo1;
-    //partie 2
-    nbTypeNeuronIci = 1;
-    double repNCumulee2[1] = {1};
-    double probCo2[8] = {/*type 1*/0.4, 0.1, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4};
-    brainPart[1].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[1].repartitionNeuronCumulee = repNCumulee2;
-    brainPart[1].probaConnection = probCo2;
-    //partie 3
-    nbTypeNeuronIci = 2;
-    double repNCumulee3[2] = {0.7, 1};
-    double probCo3[16] = {/*type 1*/0.1, 0.5, 0.4, 0.5, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[2].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[2].repartitionNeuronCumulee = repNCumulee3;
-    brainPart[2].probaConnection = probCo3;
-    //partie 4
-    nbTypeNeuronIci = 3;
-    double repNCumulee4[3] = {0.5, 0.9, 1};
-    double probCo4[24] = {/*type 1*/0.4, 0.5, 0.5, 0.1, 0.4, 0.4, 0.5, 0.4, /*type 2*/0.6, 0.5, 0.2, 0.5, 0.6, 0.5, 0.45, 0.0, /*type 3*/0.6, 0.05, 0.1, 0.1, 0.1, 0.05, 0.1, 0.05};
-    brainPart[3].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[3].repartitionNeuronCumulee = repNCumulee4;
-    brainPart[3].probaConnection = probCo4;
-    //partie 5
-    nbTypeNeuronIci = 1;
-    double repNCumulee5[1] = {1};
-    double probCo5[8] = {/*type 1*/0.4, 0.4, 0.4, 0.5, 0.1, 0.4, 0.5, 0.4};
-    brainPart[4].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[4].repartitionNeuronCumulee = repNCumulee5;
-    brainPart[4].probaConnection = probCo5;
-    //partie 6
-    nbTypeNeuronIci = 1;
-    double repNCumulee6[1] = {1};
-    double probCo6[8] = {/*type 1*/0.4, 0.4, 0.4, 0.55, 0.4, 0.1, 0.6, 0.4};
-    brainPart[5].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[5].repartitionNeuronCumulee = repNCumulee6;
-    brainPart[5].probaConnection = probCo6;
-    //partie 7
-    nbTypeNeuronIci = 1;
-    double repNCumulee7[1] = {1};
-    double probCo7[8] = {/*type 1*/0.4, 0.2, 0.4, 0.6, 0.4, 0.4, 0.05, 0.4};
-    brainPart[6].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[6].repartitionNeuronCumulee = repNCumulee7;
-    brainPart[6].probaConnection = probCo7;
-    //partie 8
-    nbTypeNeuronIci = 2;
-    double repNCumulee8[2] = {0.3, 1};
-    double probCo8[16] = {/*type 1*/0.05, 0.05, 0.1, 0.05, 0.2, 0.1, 0.1, 0.5, /*type 2*/0.4, 0.5, 0.4, 0.6, 0.4, 0.4, 0.05, 0.1};
-    brainPart[7].nbTypeNeuron = nbTypeNeuronIci;
-    brainPart[7].repartitionNeuronCumulee = repNCumulee8;
-    brainPart[7].probaConnection = probCo8;
-
-    Brain Cerveau;
-    Cerveau.dimension = n;
-    Cerveau.nb_part = nb_part;
-    Cerveau.parties_cerveau = part_cerv;
-    Cerveau.brainPart = brainPart;
-
-    if (my_rank == 0 && debug_cerveau)
-    {
-      printf("\n#############\nRecap de votre cerveau :\n");
-
-      printf("Taille : %i*%i\nNombre de parties : %i\nIndices auxquelles commencent les parties : [",Cerveau.dimension,Cerveau.dimension,Cerveau.nb_part);
-      for (i=0; i<Cerveau.nb_part; i++)
-      {
-          printf("%i ",Cerveau.parties_cerveau[i]);
-      }
-      printf("]\n\n");
-      for (i=0; i<Cerveau.nb_part; i++)
-      {
-          printf("\n");
-          printf("Partie %i :\n\tNombre de types de neurones : %i\n\t",i,Cerveau.brainPart[i].nbTypeNeuron);
-          printf("Probabilités cumulées d'appartenir à chaque type de neurone : [");
-          for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
-          {
-              printf("%lf ",Cerveau.brainPart[i].repartitionNeuronCumulee[j]);
-          }
-          printf("]\n\tConnections :\n\t");
-          for (j=0;j<Cerveau.brainPart[i].nbTypeNeuron;j++)
-          {
-              printf("Connections du type de neurone d'indice %i :\n\t",j);
-              for (k=0;k<Cerveau.nb_part;k++)
-              {
-                  printf("%i -> %i : %lf\n\t",i,k,Cerveau.brainPart[i].probaConnection[j*Cerveau.nb_part + k]);
-              }
-          }
-      }
-
-      printf("\n");
-    }
+    //Cerveau écrit en dur
+    Brain Cerveau = get_hard_brain(n); //Cerveau défini dans hardbrain.h
+    if (my_rank == 0 && debug_cerveau) {printf_recap_brain(&Cerveau);}
 
     MPI_Barrier(MPI_COMM_WORLD);
     start_brain_generation_time = my_gettimeofday(); //début de la mesure de temps de génération de la matrice A transposée
@@ -652,6 +552,7 @@ int main(int argc, char **argv)
         printf("Temps total écoulé : %.1f s\n", total_time);
     }
 
+    free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
     if (debug_pagerank) {free(q_global);}
     if (debug_print_full_pagerank_result) {free(pagerank_result);}
     free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
