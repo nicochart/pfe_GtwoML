@@ -166,6 +166,40 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
     }
 }
 
+void printf_csr_matrix_int_maxdim(IntCSRMatrix * M, int max_dim)
+{
+    /*
+    Imprime la matrice d'entiers stockée en format CSR passée en paramètre
+    Si une des dimension de la matrice dépasse max_dim, le message "trop grande pour être affichée" est affiché
+    */
+    long i,j;
+
+    if ((*M).dim_l <= max_dim && (*M).dim_c <=max_dim) //si l'une des dimensions de la matrice est supérieure à max_dim, on n'affiche pas la matrice
+    {
+        for (i=0;i<(*M).dim_l;i++)
+        {
+            for (j=0;j<(*M).dim_c;j++)
+            {
+                printf("%i ", get_csr_matrix_value_int(i, j, M));
+            }
+            printf("\n");
+        }
+    }
+    else
+    {
+        printf("Matrice trop grande pour être affichée..\n");
+    }
+}
+
+void printf_csr_matrix_int(IntCSRMatrix * M)
+{
+    /*
+    Imprime la matrice d'entiers stockée en format CSR passée en paramètre
+    Si une des dimension de la matrice dépasse 32, le message "trop grande pour être affichée" est affiché
+    */
+    printf_csr_matrix_int_maxdim(M, 32);
+}
+
 MatrixBlock fill_matrix_block_info(int rank, int nb_blocks_row, int nb_blocks_column, long n)
 {
     /*

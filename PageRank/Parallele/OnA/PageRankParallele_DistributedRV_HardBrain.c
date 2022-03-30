@@ -463,28 +463,13 @@ int main(int argc, char **argv)
         MPI_Barrier(MPI_COMM_WORLD);
         for (k=0;k<p;k++)
         {
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Barrier(MPI_COMM_WORLD); //des problèmes d'affichage peuvent survenir, MPI_Barrier ne marche pas bien avec les prints..
             if (my_rank == k)
             {
                 printf("Matrice du processus %i :\n",my_rank);
-                for (i=0;i<myBlock.dim_l;i++)
-                {
-                    if (nb_ligne<=20 && nb_colonne <=20) //si la dimension de la matrice est inférieur ou égale à 32, on peut l'afficher
-                    {
-                        for (j=0;j<myBlock.dim_c;j++)
-                        {
-                            printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
-                        }
-                        printf("\n");
-                    }
-                }
-                if (nb_ligne>20 || nb_colonne>20)
-                {
-                    printf("trop grande pour être affichée\n");
-                }
+                printf_csr_matrix_int_maxdim(&A_CSR, 20);
             }
         }
-        MPI_Barrier(MPI_COMM_WORLD);
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
