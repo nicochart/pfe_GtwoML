@@ -165,3 +165,52 @@ void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
         *(CSR_Row + current_indl + 1) = i;
     }
 }
+
+MatrixBlock fill_matrix_block_info(int rank, int nb_blocks_row, int nb_blocks_column, long n)
+{
+    /*
+    Rempli une structure MatrixBlock en fonction des paramètres reçu, et la retourne
+    Les informations remplies sont uniquement les informations basiques
+    */
+    struct MatrixBlock MBlock;
+    MBlock.indl = rank / nb_blocks_column; //indice de ligne dans la grille 2D de processus
+    MBlock.indc = rank % nb_blocks_column; //indice de colonne dans la grille 2D de processus
+    MBlock.dim_l = n/nb_blocks_row; //nombre de lignes dans un block
+    MBlock.dim_c = n/nb_blocks_column; //nombre de colonnes dans un block
+    MBlock.startRow = MBlock.indl*MBlock.dim_l;
+    MBlock.endRow = (MBlock.indl+1)*MBlock.dim_l-1;
+    MBlock.startColumn = MBlock.indc*MBlock.dim_c;
+    MBlock.endColumn = (MBlock.indc+1)*MBlock.dim_c-1;
+    return MBlock;
+}
+
+MatrixBlock fill_matrix_block_info_adjacency_prv_pagerank(int rank, int nb_blocks_row, int nb_blocks_column, long n)
+{
+    /*
+    Rempli une structure MatrixBlock en fonction des paramètres reçu, et la retourne
+    La structure est remplie pour un PageRank avec vecteur résultat réparti, appliqué à une matrice d'adjacence
+    Les explications sur ce remplissage sont disponible dans le pdf "explication du PageRank version 6"
+    */
+    int pgcd_nbr_nbc, local_result_vector_size_row_blocks, local_result_vector_size_column_blocks;
+    long local_result_vector_size_column;
+    double grid_dim_factor;
+
+    int tmp_r = nb_blocks_row, tmp_c = nb_blocks_column;
+    while (tmp_c!=0) {pgcd_nbr_nbc = tmp_r % tmp_c; tmp_r = tmp_c; tmp_c = pgcd_nbr_nbc;}
+    pgcd_nbr_nbc = tmp_r;
+
+    struct MatrixBlock MBlock = fill_matrix_block_info(rank, nb_blocks_row, nb_blocks_column, n);
+
+    grid_dim_factor = (double) nb_blocks_row / (double) nb_blocks_column;
+    MBlock.pr_result_redistribution_root = (int) MBlock.indl / grid_dim_factor;
+    local_result_vector_size_column_blocks = nb_blocks_column /pgcd_nbr_nbc;
+    local_result_vector_size_row_blocks = nb_blocks_row / pgcd_nbr_nbc;
+    local_result_vector_size_column = local_result_vector_size_column_blocks * MBlock.dim_c;
+    MBlock.result_vector_calculation_group = MBlock.indc / local_result_vector_size_column_blocks;
+    MBlock.indc_in_result_vector_calculation_group = MBlock.indc % local_result_vector_size_column_blocks;
+    MBlock.inter_result_vector_need_group_communicaton_group = (MBlock.indl % local_result_vector_size_row_blocks) * nb_blocks_column + MBlock.indc;
+    MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * MBlock.indc_in_result_vector_calculation_group;
+    MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * MBlock.indl % local_result_vector_size_row_blocks;
+    MBlock.my_result_vector_calculation_group_rank = MBlock.indc_in_result_vector_calculation_group + MBlock.indl * local_result_vector_size_column_blocks;
+    return MBlock;
+}

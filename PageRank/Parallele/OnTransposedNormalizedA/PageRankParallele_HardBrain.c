@@ -159,7 +159,7 @@ int main(int argc, char **argv)
     long n;
     int q = sqrt(p);
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
-    int my_indl, my_indc; //indice de ligne et colonne du bloc
+    struct MatrixBlock myBlock; //indice de ligne et colonne du bloc
     long long size;
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
@@ -212,17 +212,8 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    my_indl = my_rank / nb_blocks_column;
-    my_indc = my_rank % nb_blocks_column;
-    struct MatrixBlock myBlock;
-    myBlock.indl = my_indl;
-    myBlock.indc = my_indc;
-    myBlock.dim_l = nb_ligne;
-    myBlock.dim_c = nb_colonne;
-    myBlock.startRow = my_indl*nb_ligne;
-    myBlock.endRow = (my_indl+1)*nb_ligne-1;
-    myBlock.startColumn = my_indc*nb_colonne;
-    myBlock.endColumn = (my_indc+1)*nb_colonne-1;
+    /* Remplissage de la structure MatrixBlock : donne les informations sur le block local (processus) */
+    myBlock = fill_matrix_block_info(my_rank, nb_blocks_row, nb_blocks_column, n);
 
     /* Communicateurs par ligne et colonne */
     MPI_Comm ROW_COMM;

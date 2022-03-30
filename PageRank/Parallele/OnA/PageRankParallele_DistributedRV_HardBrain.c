@@ -159,15 +159,14 @@ int main(int argc, char **argv)
     long n;
     int q = sqrt(p);
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
-    int my_indl, my_indc; //indice de ligne et colonne du bloc
+    struct MatrixBlock myBlock; //contiendra toutes les informations du block local (processus), indice de ligne/colonne dans la grille 2D, infos pour le PageRank.. voir matrixstruct.h
     long long size;
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types;
 
-    double grid_dim_factor;
+    double grid_dim_factor; //utilisé seulement si debug_matrix_block = 1
     int local_result_vector_size_column_blocks;
-    int local_result_vector_size_row_blocks;
     long local_result_vector_size_column;
 
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
@@ -217,29 +216,14 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    my_indl = my_rank / nb_blocks_column;
-    my_indc = my_rank % nb_blocks_column;
-    struct MatrixBlock myBlock;
-    myBlock.indl = my_indl;
-    myBlock.indc = my_indc;
-    myBlock.dim_l = nb_ligne;
-    myBlock.dim_c = nb_colonne;
-    myBlock.startRow = my_indl*nb_ligne;
-    myBlock.endRow = (my_indl+1)*nb_ligne-1;
-    myBlock.startColumn = my_indc*nb_colonne;
-    myBlock.endColumn = (my_indc+1)*nb_colonne-1;
-
-    grid_dim_factor = (double) nb_blocks_row / (double) nb_blocks_column;
-    myBlock.pr_result_redistribution_root = (int) myBlock.indl / grid_dim_factor;
+    /* Remplissage de la structure MatrixBlock : donne les informations sur le block local (processus) + infos bonus pour le PageRank et les communicateurs */
+    myBlock = fill_matrix_block_info_adjacency_prv_pagerank(my_rank, nb_blocks_row, nb_blocks_column, n);
+    if (debug_matrix_block)
+    {
+        grid_dim_factor = (double) nb_blocks_row / (double) nb_blocks_column;
+    }
     local_result_vector_size_column_blocks = nb_blocks_column / pgcd(nb_blocks_row, nb_blocks_column);
-    local_result_vector_size_row_blocks = nb_blocks_row / pgcd(nb_blocks_row, nb_blocks_column);
     local_result_vector_size_column = local_result_vector_size_column_blocks * nb_colonne;
-    myBlock.result_vector_calculation_group = myBlock.indc / local_result_vector_size_column_blocks;
-    myBlock.indc_in_result_vector_calculation_group = myBlock.indc % local_result_vector_size_column_blocks;
-    myBlock.inter_result_vector_need_group_communicaton_group = (myBlock.indl % local_result_vector_size_row_blocks) * nb_blocks_column + myBlock.indc;
-    myBlock.startColumn_in_result_vector_calculation_group = nb_colonne * myBlock.indc_in_result_vector_calculation_group;
-    myBlock.startRow_in_result_vector_calculation_group = nb_ligne * myBlock.indl % local_result_vector_size_row_blocks;
-    myBlock.my_result_vector_calculation_group_rank = myBlock.indc_in_result_vector_calculation_group + myBlock.indl * local_result_vector_size_column_blocks;
 
     /* Communicateurs par ligne et colonne */
     MPI_Comm ROW_COMM;
