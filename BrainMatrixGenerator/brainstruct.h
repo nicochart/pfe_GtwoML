@@ -38,8 +38,8 @@ typedef struct Brain Brain;
 //structure permettant de débugger le générateur de matrice correspondant à un cerveau en COO "generate_csr_brain_adjacency_matrix_for_pagerank"
 struct DebugBrainMatrixInfo
 {
-     long dim_c; //nombre de neurones "destination" (sur les colonnes de la matrice)
-     long dim_l; //nombre de neurones "source" (sur les lignes de la matrice)
+     long dim_c; //nombre de neurones "destination" local (sur les colonnes de la matrice locale)
+     long dim_l; //nombre de neurones "source" local (sur les lignes de la matrice locale)
      int * types; //vecteur de taille dim_c indiquant le type choisi pour chaque neurones du cerveau
      long * nb_connections; //vecteur de taille dim_c en sortie du générateur, et de taille n (dimension totale de la matrice) après communications, indiquant le nombre de connections qu'a effectué chaque neurone.
      long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.

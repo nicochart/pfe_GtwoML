@@ -302,19 +302,6 @@ int main(int argc, char **argv)
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
-    /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
-    nb_connections_local_tmp = (long *)malloc(n * sizeof(long)); //réecriture des informations de débug sur le nombre de connexion dans un vecteur de taille n (dimension de la matrice) aux indices correspondants, pour allreduce
-    for (i=0;i<n;i++) {nb_connections_local_tmp[i] = 0;} //initialisation à 0
-    for (i=myBlock.startRow;i<=myBlock.endRow;i++)
-    {
-        nb_connections_local_tmp[i] = MatrixDebugInfo.nb_connections[i - myBlock.startRow]; //prise en compte du décalage ligne (pour écrire aux indices qui correspondent aux neurones dans la matrice globale)
-    }
-    nb_connections_tmp = (long *)malloc(n * sizeof(long));
-    MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, n, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-    free(nb_connections_local_tmp);
-    MatrixDebugInfo.nb_connections = nb_connections_tmp;
-    /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
-
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 

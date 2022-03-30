@@ -212,18 +212,11 @@ int main(int argc, char **argv)
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
-        generate_csr_row_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, &MatrixDebugInfo);
-
-        /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
-        nb_connections_local_tmp = MatrixDebugInfo.nb_connections;
-        nb_connections_tmp = (long *)malloc(MatrixDebugInfo.dim_c * sizeof(long));
-        MatrixDebugInfo.nb_connections = nb_connections_tmp;
-        MPI_Allreduce(nb_connections_local_tmp, nb_connections_tmp, MatrixDebugInfo.dim_c, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nombres de connexions local dans nombres de connexions global
-        /* MatrixDebugInfo.nb_connections contient maintenant (dans tout les processus) le nombre GLOBAL de connexions faites pour chaque neurone. */
+        generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, &MatrixDebugInfo);
     }
     else
     {
-        generate_csr_row_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
+        generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
