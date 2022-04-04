@@ -15,68 +15,6 @@
 
 #define NULL ((void *)0)
 
-/*-----------------------------------------------------------
---- Opérations sur les matrices (à déplacer ou supprimer) ---
------------------------------------------------------------*/
-
-long cpt_nb_zeros_matrix(int *M, long long size)
-{
-    /*Compte le nombre de 0 dans la matrice M stockée comme un vecteur d'entiers à size elements*/
-    long compteur = 0;
-    for (int d=0;d<size;d++)
-    {
-        if (*(M+d) == 0) {compteur++;}
-    }
-    return compteur;
-}
-
-void normalize_matrix_on_rows(DoubleCSRMatrix * M_CSR, MatrixBlock BlockInfo, long * row_sum_vector)
-{
-    /*
-    Normalise la matrice parallèle CSR M_CSR, stockée en parallèle, sur les lignes.
-    Les lignes dans la matrice (complète) doivent être de longueur matrix_dim_c
-    Le vecteur row_sum_vector doit contenir le nombre d'éléments sur chaque ligne (vecteur de longueur matrix_dim_l).
-    */
-    long i,j;
-    for(i=0; i<(*M_CSR).dim_l; i++) //parcours du vecteur row
-    {
-        for (j=(*M_CSR).Row[i]; j<(*M_CSR).Row[i+1]; j++) //parcours du vecteur column
-        {
-            (*M_CSR).Value[j] = 1.0/row_sum_vector[BlockInfo.startRow+i];
-        }
-    }
-}
-
-void matrix_vector_product(double *y, double *A, double *x, int n)
-{
-    int i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice n*n, y et x doivent être de longueur n*/
-    for (i=0;i<n;i++)
-    {
-        y[i] = 0;
-        for (j=0;j<n;j++)
-        {
-            y[i] += A[i*n+j] * x[j];
-        }
-    }
-}
-
-void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
-{
-    long i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice stockée au format CSR, x et y doivent être de talle (*A).dim_c*/
-    long nb_ligne = (*A).dim_l;
-    long nb_col = (*A).dim_c;
-    for (i=0;i<nb_ligne;i++)
-    {
-        y[i] = 0;
-        for (j=(*A).Row[i]; j<(*A).Row[i+1]; j++) //for (j=0;j<nb_col;j++)  y[i] += A[i*nb_col+j] * x[j]
-        {
-            y[i] += (*A).Value[j] * x[(*A).Column[j]];
-        }
-    }
-}
-
 /*---------------------------------
 --- Opérations sur les vecteurs ---
 ---------------------------------*/
@@ -300,22 +238,42 @@ int main(int argc, char **argv)
 
     //Génération de la matrice CSR à partir du cerveau
     struct DebugBrainMatrixInfo MatrixDebugInfo;
-    generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+
+    if (debug_cerveau)
+    {
+        generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+    }
+    else
+    {
+        generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
+    }
 
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 
+    long * nb_connections_rows_global;
+    if (debug_cerveau)
+    {
+        nb_connections_rows_global = MatrixDebugInfo.nb_connections;
+    }
+    else
+    {
+        nb_connections_rows_global = get_nnz_rows(&A_CSR, myBlock, n); //obtention du nombre de connection par neurone (nnz par ligne)
+    }
+
     nb_non_zeros_local = A_CSR.len_values;
     MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
 
-    //debug
-    total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
-    MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
-    MatrixDebugInfo.cpt_values = nb_non_zeros;
-
-    if (debug_cerveau && my_rank == 0)
+    //debug de la mémoire totale allouée
+    if (debug_cerveau)
     {
-        printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+        total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
+        MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
+        MatrixDebugInfo.cpt_values = nb_non_zeros;
+        if (my_rank == 0)
+        {
+            printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);
+        }
     }
 
     //Page Rank
@@ -372,7 +330,7 @@ int main(int argc, char **argv)
         sum_new_q = 0;
         for(i=0; i<nb_ligne; i++)
         {
-            nb_elements_ligne = MatrixDebugInfo.nb_connections[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
+            nb_elements_ligne = nb_connections_rows_global[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
             sc = morceau_old_q[myBlock.startRow_in_result_vector_calculation_group + i] / (double) nb_elements_ligne;
             for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++)
             {
@@ -468,9 +426,10 @@ int main(int argc, char **argv)
         partie = get_brain_part_ind(i, &Cerveau);
         type = neuron_types[i];
         pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
-        nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
+        //if (my_rank == 0) {printf("Ajout de %f au pourcentage éspéré, partie %i neurone de type %i\n",pourcentage_espere,partie,type);} //bug d'affichage print pourcentage global espéré : si on décommente ce print, le bug d'affichage n'est plus.
         if (my_rank == 0 && debug_cerveau)
         {
+            nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
             printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
         }
         sum_pourcentage_espere += pourcentage_espere;
@@ -512,13 +471,11 @@ int main(int argc, char **argv)
     if (debug_pagerank) {free(q_global);}
     if (debug_print_full_pagerank_result) {free(pagerank_result);}
     free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
-    free(neuron_types);
+    free(neuron_types); //Revient à faire MatrixDebugInfo.types est free plus haut
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
 
-    if (debug_cerveau)
-    {
-        free(MatrixDebugInfo.nb_connections); //MatrixDebugInfo.types est free plus haut : free(neuron_types);
-    }
+    free(nb_connections_rows_global); //(revient à faire free(nb_connections_rows_global) si debug_cerveau est à 1).
+
     MPI_Finalize();
     return 0;
 }

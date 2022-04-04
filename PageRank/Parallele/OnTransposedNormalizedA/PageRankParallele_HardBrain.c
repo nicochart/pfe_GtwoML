@@ -13,85 +13,6 @@
 
 #define NULL ((void *)0)
 
-/*-----------------------------------------------------------
---- Opérations sur les matrices (à déplacer ou supprimer) ---
------------------------------------------------------------*/
-
-long cpt_nb_zeros_matrix(int *M, long long size)
-{
-    /*Compte le nombre de 0 dans la matrice M stockée comme un vecteur d'entiers à size elements*/
-    long compteur = 0;
-    for (int d=0;d<size;d++)
-    {
-        if (*(M+d) == 0) {compteur++;}
-    }
-    return compteur;
-}
-
-void matrix_column_sum_vector(int *sum_vector, DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Ecrit dans sum_vector (vecteur de taille (*M_CSR).dim_c) la somme des éléments colonne par colonne de la matrice à l'adresse M_CSR.
-    Chaque case d'indice i du sum_vector contiendra la somme des éléments de la colonne du même indice i.
-    L'allocation mémoire du vecteur sum_vector doit être faite au préalable.
-    */
-    int i;
-    for (i=0;i<(*M_CSR).dim_c;i++) //initialisation du vecteur sum_vector
-    {
-        *(sum_vector+i) = 0;
-    }
-
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on ajoute la valeur à la somme de la colonne correspondante
-    {
-        *(sum_vector + (*M_CSR).Column[i]) += (*M_CSR).Value[i];
-    }
-}
-
-void normalize_matrix_on_columns(DoubleCSRMatrix * M_CSR)
-{
-    /*
-    Normalise la matrice CSR M_CSR sur les colonnes.
-    */
-    long i;
-    int * sum_vector = (int *)malloc((*M_CSR).dim_c * sizeof(int));
-    matrix_column_sum_vector(sum_vector, M_CSR); //manque un allreduce sur les colonnes. la somme est faite est local.
-    for (i=0;i<(*M_CSR).len_values;i++) //on parcours le vecteur Column et Value, et on divise chaque valeur (de Value) par la somme (dans sum_vector) de la colonne correspondante
-    {
-        (*M_CSR).Value[i] = (*M_CSR).Value[i] / sum_vector[(*M_CSR).Column[i]];
-    }
-    free(sum_vector);
-}
-
-void matrix_vector_product(double *y, double *A, double *x, int n)
-{
-    int i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice n*n, y et x doivent être de longueur n*/
-    for (i=0;i<n;i++)
-    {
-        y[i] = 0;
-        for (j=0;j<n;j++)
-        {
-            y[i] += A[i*n+j] * x[j];
-        }
-    }
-}
-
-void csr_matrix_vector_product(double *y, DoubleCSRMatrix *A, double *x)
-{
-    long i,j;
-    /* Effectue le produit matrice vecteur y = A.x. A doit être une matrice stockée au format CSR, x et y doivent être de talle (*A).dim_c*/
-    long nb_ligne = (*A).dim_l;
-    long nb_col = (*A).dim_c;
-    for (i=0;i<nb_ligne;i++)
-    {
-        y[i] = 0;
-        for (j=(*A).Row[i]; j<(*A).Row[i+1]; j++) //for (j=0;j<nb_col;j++)  y[i] += A[i*nb_col+j] * x[j]
-        {
-            y[i] += (*A).Value[j] * x[(*A).Column[j]];
-        }
-    }
-}
-
 /*---------------------------------
 --- Opérations sur les vecteurs ---
 ---------------------------------*/
@@ -159,7 +80,7 @@ int main(int argc, char **argv)
     long n;
     int q = sqrt(p);
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
-    struct MatrixBlock myBlock; //indice de ligne et colonne du bloc
+    struct MatrixBlock myBlock; //contiendra toutes les information du block (processus) local
     long long size;
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
@@ -306,7 +227,7 @@ int main(int argc, char **argv)
     //copie du vecteur Value dans NormValue
     for(i=0;i<nb_non_zeros_local;i++) {P_CSR.Value[i] = (double) A_CSR.Value[i];} //P_CSR.Value = A_CSR.Value
     //normalisation de la matrice
-    normalize_matrix_on_columns(&P_CSR);
+    normalize_csr_binary_matrix_on_columns(&P_CSR, myBlock);
 
     if (debug && nb_non_zeros <= 256)
     {
