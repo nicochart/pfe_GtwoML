@@ -199,9 +199,9 @@
       On suppose que la matrice M a ses membres remplis (notamment (*M).dim_l et (*M).Row qui sont utilisés)
       */
       IntCSRMatrix M_int;
-      M_int.dim_c = (*M_double).dim_c;
+      M_int.dim_l = (*M_double).dim_l;
       M_int.len_values = (*M_double).len_values;
-      M_int.Column = (*M_double).Column;
+      M_int.Row = (*M_double).Row;
       return get_nnz_rows_local(&M_int);
   }
 
