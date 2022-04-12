@@ -77,6 +77,17 @@
   --- Opérations sur les matrices ---
   ---------------------------------*/
 
+/*
+ * Returns the value at the index [indl,indc] of the int CSR matrix passed as parameter
+ *
+ * :Parameters IN:
+ * M_CSR {IntCSRMatrix *} : Int CSR matrix of which we want to know the value at the index [indl,indc]
+ * indl {long} : row index of the value we want (must be < to (*M_CSR).dim_l)
+ * indc {long} : column index of the value we want (must be < to (*M_CSR).dim_c)
+ *
+ * :Return:
+ * (int) : Matrix value at the index [indl,indc]
+ */
   int get_csr_matrix_value_int(long indl, long indc, IntCSRMatrix * M_CSR)
   {
       /*
@@ -87,7 +98,7 @@
       Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
       if (indl >= (*M_CSR).dim_l || indc >= (*M_CSR).dim_c)
       {
-          perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
+          perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_csr_matrix_value_int()\n");
           return -1;
       }
       long i;
@@ -99,6 +110,17 @@
       return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
   }
 
+/*
+ * Returns the value at the index [indl,indc] of the double CSR matrix passed as parameter
+ *
+ * :Parameters IN:
+ * M_CSR {DoubleCSRMatrix *} : Double CSR matrix of which we want to know the value at the index [indl,indc]
+ * indl {long} : row index of the value we want (must be < to (*M_CSR).dim_l)
+ * indc {long} : column index of the value we want (must be < to (*M_CSR).dim_c)
+ *
+ * :Return:
+ * (double) : Matrix value at the index [indl,indc]
+ */
   double get_csr_matrix_value_double(long indl, long indc, DoubleCSRMatrix * M_CSR)
   {
       /*
@@ -109,7 +131,7 @@
       Row = (*M_CSR).Row; Column = (*M_CSR).Column; Value = (*M_CSR).Value;
       if (indl >= (*M_CSR).dim_l || indc >= (*M_CSR).dim_c)
       {
-          perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_sparce_matrix_value()\n");
+          perror("ATTENTION : des indices incohérents ont été fournis dans la fonction get_csr_matrix_value_double()\n");
           return -1;
       }
       long i;
@@ -121,6 +143,20 @@
       return 0; //<=> on a parcouru la ligne et on a pas trouvé de valeur dans la colonne
   }
 
+/*
+ * Makes a matrix in CSR format from the COO matrix passed as a parameter.
+ * Warning: the two matrices are linked together. The "Column" and "Value" vectors are shared.
+ *
+ * :Parameters IN:
+ * M_COO {IntCOOMatrix *} : Pointer to a Int COO matrix which we want to translate to CSR
+ *
+ * :Parameter OUT:
+ * M_CSR {IntCSRMatrix *} : Pointer to a structure representing a Int CSR matrix, corresponding to the COO matrix translated into CSR
+ *
+ * :Condition:
+ * Do not use this function is you want to free the COO matrix after this operation.
+ * The two matrices are linked: the Column and Value vectors of the CSR matrix point to the same memory area as the Column and Value vectors of the COO matrix.
+ */
   void coo_to_csr_matrix(IntCOOMatrix * M_COO, IntCSRMatrix * M_CSR)
   {
       /*
@@ -166,6 +202,16 @@
       }
   }
 
+/*
+ * Returns the number of non-zero elements in a row of a CSR matrix
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix of which we want to know the number of non-zero in a row
+ * irow {long} : index of the row we want to know the number of non-zero
+ *
+ * :Return:
+ * (long) : number of non-zero in the "irow" row of M matrix.
+ */
   long get_nnz_row(IntCSRMatrix * M, long irow)
   {
       /*
@@ -176,6 +222,15 @@
       return (long) (*M).Row[irow+1] - (*M).Row[irow];
   }
 
+/*
+ * Returns a pointer to a long vector containing the nnz (number of non-zero) in each row, in the process (local). (the vector size is (*M).dim_l (dimension in rows of the local matrix))
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix of which we want to calculate the local sum per row
+ *
+ * :Return:
+ * nnz_rows {long * [(*M_double).dim_l]} : local nnz per row vector
+ */
   long * get_nnz_rows_local(IntCSRMatrix * M)
   {
       /*
@@ -192,6 +247,16 @@
       return nnz_rows;
   }
 
+/*
+ * Returns a pointer to a long vector containing the nnz (number of non-zero) in each rows, in the process (local). (the vector size is (*M_double).dim_l (dimension in rows of the local matrix))
+ * The function that does the same on int CSR matrix is called, after having adapted the double CSR matrix (parameter).
+ *
+ * :Parameters IN:
+ * M_double {DoubleCSRMatrix *} : Double CSR matrix of which we want to calculate the local sum per row
+ *
+ * :Return:
+ * get_nnz_rows_local() -> nnz_rows {long * [(*M_double).dim_l]} : local nnz per row vector
+ */
   long * get_nnz_rows_local_double(DoubleCSRMatrix * M_double)
   {
       /*
@@ -205,6 +270,17 @@
       return get_nnz_rows_local(&M_int);
   }
 
+/*
+ * Returns a pointer to a long vector of size dim_l, containing the nnz (number of non-zero) of each rows of the global matrix (all processes combined)
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix of which we want to calculate the sum per column
+ * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block"), allows to define the communicators
+ * dim_l {long} : matrix global dimension on rows (all processes combined)
+ *
+ * :Return:
+ * nnz_rows_global {long * [dim_l]} : nnz per row vector
+ */
   long * get_nnz_rows(IntCSRMatrix * M, MatrixBlock BlockInfo, long dim_l)
   {
       /*
@@ -235,6 +311,15 @@
       return nnz_rows_global;
   }
 
+/*
+ * Returns a pointer to a long vector containing the nnz (number of non-zero) in each column, in the process (local). (the vector size is (*M).dim_c (dimension in columns of the local matrix))
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix of which we want to calculate the local sum per column
+ *
+ * :Return:
+ * nnz_columns {long * [(*M_double).dim_c]} : local nnz per column vector
+ */
   long * get_nnz_columns_local(IntCSRMatrix * M)
   {
       /*
@@ -257,6 +342,16 @@
       return nnz_columns;
   }
 
+/*
+ * Returns a pointer to a long vector containing the nnz (number of non-zero) in each column, in the process (local). (the vector size is (*M_double).dim_c (dimension in columns of the local matrix))
+ * The function that does the same on int CSR matrix is called, after having adapted the double CSR matrix (parameter).
+ *
+ * :Parameters IN:
+ * M_double {DoubleCSRMatrix *} : Double CSR matrix of which we want to calculate the local sum per column
+ *
+ * :Return:
+ * get_nnz_columns_local() -> nnz_columns {long * [(*M_double).dim_c]} : local nnz per column vector
+ */
   long * get_nnz_columns_local_double(DoubleCSRMatrix * M_double)
   {
       /*
@@ -270,6 +365,17 @@
       return get_nnz_columns_local(&M_int);
   }
 
+/*
+ * Returns a pointer to a long vector of size dim_c, containing the nnz (number of non-zero) of each column of the global matrix (all processes combined)
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix of which we want to calculate the sum per column
+ * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block"), allows to define the communicators
+ * dim_c {long} : matrix global dimension on columns (all processes combined)
+ *
+ * :Return:
+ * nnz_columns_global {long * [dim_c]} : nnz per column vector
+ */
   long * get_nnz_columns(IntCSRMatrix * M, MatrixBlock BlockInfo, long dim_c)
   {
       /*
@@ -300,6 +406,15 @@
       return nnz_columns_global;
   }
 
+/*
+ * Normalizes the parallel CSR matrix M_CSR, stored in parallel, on the columns. The sum of the elements per column is calculated in the function, which generates communications on the columns
+ *
+ * :Parameters IN:
+ * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block"), allows to define the communicators
+ *
+ * :Result-Parameters IN:
+ * M {DoubleCSRMatrix *} : Double CSR matrix, to be normalized (edited (normalized) during the run)
+ */
   void normalize_csr_binary_matrix_on_columns(DoubleCSRMatrix * M, MatrixBlock BlockInfo)
   {
       /*
@@ -326,6 +441,15 @@
       free(nnz_columns);
   }
 
+/*
+ * Normalizes the parallel CSR matrix M_CSR, stored in parallel, on the rows. The sum of the elements per row is passed as a parameter, which avoids communications on the rows
+ *
+ * :Parameters IN:
+ * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block"), allows to define the communicators
+ *
+ * :Result-Parameters IN:
+ * M {DoubleCSRMatrix *} : Double CSR matrix, to be normalized (edited (normalized) during the run)
+ */
   void normalize_csr_binary_matrix_on_rows_global_sum_vector(DoubleCSRMatrix * M_CSR, MatrixBlock BlockInfo, long * row_sum_vector)
   {
       /*
@@ -347,6 +471,15 @@
       }
   }
 
+/*
+ * Normalizes the parallel CSR matrix M_CSR, stored in parallel, on the rows. The sum of the elements per row is calculated in the function, which generates communications on the rows
+ *
+ * :Parameters IN:
+ * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block"), allows to define the communicators
+ *
+ * :Result-Parameters IN:
+ * M {DoubleCSRMatrix *} : Double CSR matrix, to be normalized (edited (normalized) during the run)
+ */
   void normalize_csr_binary_matrix_on_rows(DoubleCSRMatrix * M, MatrixBlock BlockInfo)
   {
       /*
@@ -376,6 +509,13 @@
       free(nnz_rows);
   }
 
+/*
+ * Prints the local Int CSR Matrix passed as parameter like a classic matrix (also prints the 0s), if the dimension of the matrix is ​​not too large
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix, to be printed
+ * max_dim {int} : max matrix dimension (if the dimension of the matrix is ​​above this value, it is not printed)
+ */
   void printf_csr_matrix_int_maxdim(IntCSRMatrix * M, int max_dim)
   {
       /*
@@ -401,10 +541,20 @@
       }
   }
 
+/*
+ * Performs the matrix-vector product y = M.x, and returns y.
+ *
+ * :Parameters IN:
+ * M {DoubleCSRMatrix *} : Double CSR matrix
+ * x {double * [(*M).dim_c]} : Doubles Vector (of size (*M).dim_c = number of columns in the matrix)
+ *
+ * :Return:
+ * y {double * [(*M).dim_c]} : Matrix-vector product M.x
+ */
   double * local_csr_matrix_vector_product(DoubleCSRMatrix *M, double *x)
   {
       /*
-      Effectue le produit matrice vecteur y = M.x, et retourne y. M doit être une matrice stockée au format CSR, ses champs doivent être correctement remplis, x doit être de taille (*M).dim_c = nombre de colonnes dans la matrice
+      Effectue le produit matrice vecteur y = M.x, et retourne y. M doit être une matrice stockée au format CSR, ses champs doivent être correctement remplis, x doit être de taille (*M).dim_c
       Le produit matrice_vecteur est effectué en local, et de manière non-optimale. Aucune parallélisation n'est prise en compte
       */
       long i,j;
@@ -421,6 +571,13 @@
       return y;
   }
 
+/*
+ * Prints the local Int CSR Matrix passed as parameter like a classic matrix (also prints the 0s), if the dimension of the matrix is ​​not superior to 32
+ * (calls the printf_csr_matrix function with maximum dimension of 32)
+ *
+ * :Parameters IN:
+ * M {IntCSRMatrix *} : Int CSR matrix, to be printed
+ */
   void printf_csr_matrix_int(IntCSRMatrix * M)
   {
       /*
@@ -430,6 +587,18 @@
       printf_csr_matrix_int_maxdim(M, 32);
   }
 
+/*
+ * Returns a MatrixBlock structure according to the parameters received. The information filled in is only the basic information
+ *
+ * :Parameters IN:
+ * rank {int} : mpi process rank
+ * nb_blocks_row {int} : number of processes (blocks) on rows (in the process grid)
+ * nb_blocks_column {int} : number of processes (blocks) on columns (in the process grid)
+ * n (long) : global (total) matrix dimension
+ *
+ * :Return:
+ * MBlock {MatrixBlock} : structure containing basic information of the Matrix Block (process)
+ */
   MatrixBlock fill_matrix_block_info(int rank, int nb_blocks_row, int nb_blocks_column, long n)
   {
       /*
@@ -448,6 +617,18 @@
       return MBlock;
   }
 
+/*
+ * Returns a MatrixBlock structure according to the parameters received. The structure is filled for a PageRank with distributed result vector, applied to an adjacency matrix
+ *
+ * :Parameters IN:
+ * rank {int} : mpi process rank
+ * nb_blocks_row {int} : number of processes (blocks) on rows (in the process grid)
+ * nb_blocks_column {int} : number of processes (blocks) on columns (in the process grid)
+ * n (long) : global (total) matrix dimension
+ *
+ * :Return:
+ * MBlock {MatrixBlock} : structure containing basic information of the Matrix Block (process), and information for PageRank
+ */
   MatrixBlock fill_matrix_block_info_adjacency_prv_pagerank(int rank, int nb_blocks_row, int nb_blocks_column, long n)
   {
       /*
