@@ -1,5 +1,8 @@
-/* Structures et fonctions en rapport avec les Cerveaux utilisés par le générateur de matrice-cerveau */
-/*Nicolas HOCHART*/
+//! Brain structures
+/*!
+  This file defines the structures and functions related to the Brains used by the brain-matrix generator
+  Nicolas HOCHART
+*/
 
 #define brainstruct
 
@@ -18,6 +21,12 @@
 --- Structure contenant les informations d'un cerveau et ses parties ---
 ----------------------------------------------------------------------*/
 
+//! Structure containing the information of a part of the brain
+/*!
+   Structure containing the information of a part of the brain. It contains :
+   The number of neuron types that can be encountered in the part, the cumulative distribution of neurons in the neuron types, and the probability of connection (for each type) to other parts of the brain.
+   This structure depends on the brain to which it belongs.
+ */
 struct BrainPart
 {
      int nbTypeNeuron;
@@ -26,6 +35,11 @@ struct BrainPart
 };
 typedef struct BrainPart BrainPart;
 
+//! Structure containing the information of a brain
+/*!
+   Structure containing the information of a brain. It contains :
+   The total number of neurons, the number of parts in the brain, the indices (neurons) at which parts start, the brain parts (see BrainPart structure).
+ */
 struct Brain
 {
      long dimension; //nombre de neurones total
@@ -39,6 +53,14 @@ typedef struct Brain Brain;
 --- Opérations sur les cerveaux ---
 ---------------------------------*/
 
+//! Function that returns the index of the part of the brain in which a neuron is located
+/*!
+   Function that returns the index of the part of the brain "brain" in which the neuron of index "ind" is located
+ * @param[in] ind {long} index of the neuron
+ * @param[in] brain {Brain *} pointer to a brain
+ * @return i {int} index of the brain part
+   Condition : "brain" is a well formed brain and "ind" is assumed to be between 0 and brain.dimension
+ */
 int get_brain_part_ind(long ind, Brain * brain)
 {
     /*
@@ -58,6 +80,13 @@ int get_brain_part_ind(long ind, Brain * brain)
     return i;
 }
 
+//! Function that returns the number of neurons in a specific brain part
+/*!
+   Function that returns the number of neurons in the brain part if index "part", in the brain "brain"
+ * @param[in] ind {long} index of the neuron
+ * @param[in] brain {Brain *} pointer to a brain
+ * @return {long} number of neurons in the brain part
+ */
 int get_nb_neuron_brain_part(Brain * brain, int part)
 {
     /*Renvoie le nombre de neurones dans la partie d'indice part*/
@@ -74,6 +103,14 @@ int get_nb_neuron_brain_part(Brain * brain, int part)
     }
 }
 
+//! Function that returns the average percentage of connection chances for a specific neuron to the other parts
+/*!
+   Function that returns the average percentage (between 0 and 100) of connection chances for a neuron of a given type in a given part, to the other parts
+ * @param[in] brain {Brain *} pointer to a brain
+ * @param[in] part {int} brain part index
+ * @param[in] type {int} neuron index
+ * @return {double} average percentage of connection chance
+ */
 double get_mean_connect_percentage_for_part(Brain * brain, int part, int type)
 {
     /*Renvoie le pourcentage (entre 0 et 100) de chances de connection moyen pour un neurone de type donné dans une partie donnée, vers les autres parties*/
@@ -91,6 +128,13 @@ double get_mean_connect_percentage_for_part(Brain * brain, int part, int type)
     return sum_proba/n *100;
 }
 
+//! Choose and returns the neuron type for a neuron in a specitic brain part
+/*!
+   Choose and returns a neuron type for a neuron in the brain part of index "part", in the brain "brain"
+ * @param[in] brain {Brain *} pointer to a brain
+ * @param[in] part {int} brain part index
+ * @return {int} neuron type
+ */
 int choose_neuron_type(Brain * brain, int part)
 {
     /*Choisi de quel type sera le neurone en fonction du cerveau et de la partie auxquels il appartient*/
@@ -109,6 +153,14 @@ int choose_neuron_type(Brain * brain, int part)
     return i;
 }
 
+//! Function that generates (chooses) the types of multiple neurons and writes them in "types"
+/*!
+   Generates the types of neurons from index "ind_start_neuron" to "ind_start_neuron + nb_neuron" in the brain "brain", and writes them in "types"
+ * @param[in] brain {Brain *} pointer to a brain
+ * @param[in] part {int} brain part index
+ * @return {int} neuron type
+   Condition : The memory allocation (malloc of size nb_neuron * sizeof(int)) for "types" must be done beforehand.
+ */
 void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, int * types)
 {
     /*
@@ -126,6 +178,11 @@ void generate_neuron_types(Brain * brain, int ind_start_neuron, int nb_neuron, i
     }
 }
 
+//! Brain print
+/*!
+   Function that displays a summary of the brain passed as a parameter (useful for debugging a brain)
+ * @param[in] brain {Brain *} pointer to a brain
+ */
 void printf_recap_brain(Brain * brain)
 {
     int i,j,k;
@@ -160,6 +217,11 @@ void printf_recap_brain(Brain * brain)
     printf("\n");
 }
 
+//! Brain destructor
+/*!
+   Function that frees a brain
+ * @param[in] brain {Brain *} pointer to a brain
+ */
 void free_brain(Brain * brain)
 {
     /*libère les ressources allouées dans un cerveau. Ne libère/détruit pas le cerveau.*/

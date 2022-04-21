@@ -1,8 +1,8 @@
-/*
-Générateur de matrice-cerveau parallèle A (matrice d'adjacence, non transposée) avec des blocs de ligne et colonnes.
-Contiendra toutes les versions utilisées du générateur
+//! Matrix generator
+/*!
+  This file defines the functions allowing to generate a matrix in a parallel way, taking as input a brain.
+  Nicolas HOCHART
 */
-/*Nicolas HOCHART*/
 
 #define brainmatrixgenerator
 
@@ -29,6 +29,11 @@ Contiendra toutes les versions utilisées du générateur
 --- Structure contenant les informations de débuggage pour une matrice-cerveau générée ---
 ----------------------------------------------------------------------------------------*/
 
+//! Structure containing debug info for a generated matrix
+/*!
+   Structure containing debugging information for a generated matrix. It contains :
+   The local dimension of the matrix, the types chosen for the neurons, the number of connections (number of non-zero values) per row or column (depending on the version of the generator used), number of memory cells allocated, the number of non-zero values ​​contained in the matrix
+ */
 struct DebugBrainMatrixInfo
 {
      long dim_c; //nombre de neurones "destination" local (sur les colonnes de la matrice locale)
@@ -44,21 +49,16 @@ typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 --- Génération de la matrice-cerveau ---
 --------------------------------------*/
 
-/*V5*/
-/*
- * Generates a CSR square adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a two-dimensional process grid.
- * A row/column of the matrix corresponding to a neuron, adjacency matrix means that it is the row-neuron that connect to the column-neuron
- *
- * :Parameters IN:
- * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block")
- * brain {brainstruct.h : Brain *} : Pointer to the brain, basis for the generation of the matrix
- * neuron_types {int * [(*brain).dimension]} : vector containing the types chosen for the neurons of the brain passed as a parameter
- * :Result-Parameters OUT:
- * M_CSR {matrixstruct.h : IntCSRMatrix *} : Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
- * debugInfo {DebugBrainMatrixInfo *} : OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each row), the total number of connections, etc.
- *
- * :Condition in parameters:
- * BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
+//! Generates a CSR square adjacency matrix by the brain, 2D (grid)
+/*!
+   Generates a CSR square adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a two-dimensional process grid.
+   A row/column of the matrix corresponding to a neuron, adjacency matrix means that it is the row-neuron that connect to the column-neuron
+ * @param[in] BlockInfo {matrixstruct.h : MatrixBlock} structure containing information about the local mpi process ("block")
+ * @param[in] brain {brainstruct.h : Brain *} Pointer to the brain, basis for the generation of the matrix
+ * @param[in] neuron_types {int * [(*brain).dimension]} vector containing the types chosen for the neurons of the brain passed as a parameter
+ * @param[out] M_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
+ * @param[out] debugInfo {DebugBrainMatrixInfo *} OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each row), the total number of connections, etc.
+   Condition : BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
  */
 void generate_csr_brain_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
@@ -154,21 +154,16 @@ void generate_csr_brain_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, Matri
     }
 }
 
-/*V4*/
-/*
- * Generates a CSR square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a two-dimensional process grid.
- * A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
- *
- * :Parameters IN:
- * BlockInfo {matrixstruct.h : MatrixBlock} : structure containing information about the local mpi process ("block")
- * brain {brainstruct.h : Brain *} : Pointer to the brain, basis for the generation of the matrix
- * neuron_types {int * [(*brain).dimension]} : vector containing the types chosen for the neurons of the brain passed as a parameter
- * :Result-Parameters OUT:
- * M_CSR {matrixstruct.h : IntCSRMatrix *} : Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
- * debugInfo {DebugBrainMatrixInfo *} : OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
- *
- * :Condition in parameters:
- * BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
+//! Generates a CSR square transposed adjacency matrix by the brain, 2D (grid)
+/*!
+   Generates a CSR square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a two-dimensional process grid.
+   A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
+ * @param[in] BlockInfo {matrixstruct.h : MatrixBlock} structure containing information about the local mpi process ("block")
+ * @param[in] brain {brainstruct.h : Brain *} Pointer to the brain, basis for the generation of the matrix
+ * @param[in] neuron_types {int * [(*brain).dimension]} vector containing the types chosen for the neurons of the brain passed as a parameter
+ * @param[out] M_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
+ * @param[out] debugInfo {DebugBrainMatrixInfo *} OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
+   Condition: BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
  */
 void generate_csr_brain_transposed_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, MatrixBlock BlockInfo, Brain * brain, int * neuron_types, DebugBrainMatrixInfo * debugInfo)
 {
@@ -264,23 +259,18 @@ void generate_csr_brain_transposed_adjacency_matrix_for_pagerank(IntCSRMatrix *M
     }
 }
 
-/*V3 : CSR row blocks*/
-/*
- * Generates a CSR square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a one-two-dimensional process grid (row block parallelization)
- * A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
- *
- * :Parameters IN:
- * ind_start_row {long} : Row offset (in the 1D process grid), to be taken into account for the creation of connection between neurons
- * brain {brainstruct.h : Brain *} : Pointer to the brain, basis for the generation of the matrix
- * neuron_types {int * [(*brain).dimension]} : vector containing the types chosen for the neurons of the brain passed as a parameter
- * l {long} : number of rows in the local (process) matrix
- * c {long} : number of column in the local (process) matrix (= global matrix dimension, because the matrix is ​​parallelized in row blocks only)
- * :Result-Parameters OUT:
- * M_CSR {matrixstruct.h : IntCSRMatrix *} : Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
- * debugInfo {DebugBrainMatrixInfo *} : OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
- *
- * :Condition in parameters:
- * BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
+//! Generates a CSR square transposed adjacency matrix by the brain, 1D (row blocks)
+/*!
+   Generates a CSR square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a one-two-dimensional process grid (row block parallelization)
+   A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
+ * @param[in] ind_start_row {long} Row offset (in the 1D process grid), to be taken into account for the creation of connection between neurons
+ * @param[in] brain {brainstruct.h : Brain *} Pointer to the brain, basis for the generation of the matrix
+ * @param[in] neuron_types {int * [(*brain).dimension]} vector containing the types chosen for the neurons of the brain passed as a parameter
+ * @param[in] l {long} number of rows in the local (process) matrix
+ * @param[in] c {long} number of column in the local (process) matrix (= global matrix dimension, because the matrix is ​​parallelized in row blocks only)
+ * @param[out] M_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
+ * @param[out] debugInfo {DebugBrainMatrixInfo *} OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
+   Condition : BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
  */
 void generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(IntCSRMatrix *M_CSR, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
@@ -378,23 +368,18 @@ void generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(IntCSRMatri
     }
 }
 
-/*V2 : COO row blocks*/
-/*
- * Generates a COO square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a one-two-dimensional process grid (row block parallelization)
- * A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
- *
- * :Parameters IN:
- * ind_start_row {long} : Row offset (in the 1D process grid), to be taken into account for the creation of connection between neurons
- * brain {brainstruct.h : Brain *} : Pointer to the brain, basis for the generation of the matrix
- * neuron_types {int * [(*brain).dimension]} : vector containing the types chosen for the neurons of the brain passed as a parameter
- * l {long} : number of rows in the local (process) matrix
- * c {long} : number of column in the local (process) matrix (= global matrix dimension, because the matrix is ​​parallelized in row blocks only)
- * :Result-Parameters OUT:
- * M_CSR {matrixstruct.h : IntCSRMatrix *} : Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
- * debugInfo {DebugBrainMatrixInfo *} : OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
- *
- * :Condition in parameters:
- * BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
+//! Generates a COO square transposed adjacency matrix by the brain, 1D (row blocks)
+/*!
+   Generates a COO square transposed adjacency matrix of dimension (*brain).dimension, corresponding to the brain passed as a parameter, in a one-two-dimensional process grid (row block parallelization)
+   A row/column of the matrix corresponding to a neuron, transposed adjacency matrix means that it is the column-neuron that connect to the row-neuron
+ * @param[in] ind_start_row {long} Row offset (in the 1D process grid), to be taken into account for the creation of connection between neurons
+ * @param[in] brain {brainstruct.h : Brain *} Pointer to the brain, basis for the generation of the matrix
+ * @param[in] neuron_types {int * [(*brain).dimension]} vector containing the types chosen for the neurons of the brain passed as a parameter
+ * @param[in] l {long} number of rows in the local (process) matrix
+ * @param[in] c {long} number of column in the local (process) matrix (= global matrix dimension, because the matrix is ​​parallelized in row blocks only)
+ * @param[out] M_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR matrix. At the end of the generation, contains the generated matrix.
+ * @param[out] debugInfo {DebugBrainMatrixInfo *} OPTIONAL - Pointer to a debug structure or NULL. If not NULL, at the end of the generation, contains debug information such as the number of connections made per neuron (<=> number of 1 on each column), the total number of connections, etc.
+   Condition : BlockInfo must have been filled with information suitable for the brain (Otherwise, the generation will not necessarily fail, but the generated matrix will not necessarily correspond to the brain)
  */
 void generate_coo_row_transposed_adjacency_brain_matrix_for_pagerank(IntCOOMatrix *M_COO, long ind_start_row, Brain * brain, int * neuron_types, long l, long c, DebugBrainMatrixInfo * debugInfo)
 {
