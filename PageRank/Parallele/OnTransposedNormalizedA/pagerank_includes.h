@@ -4,17 +4,17 @@
 */
 
 #ifndef brainmatrixgenerator
-#include "../../../BrainMatrixGenerator/brainmatrixgenerator.h"
+#include "../../../BrainMatrixGenerator/includes/brainmatrixgenerator.h"
 #endif
 
 #ifndef brainstruct
-#include "../../../BrainMatrixGenerator/brainstruct.h"
+#include "../../../BrainMatrixGenerator/includes/brainstruct.h"
 #endif
 
 #ifndef randomforbrain
-#include "../../../BrainMatrixGenerator/randomforbrain.h"
+#include "../../../BrainMatrixGenerator/includes/randomforbrain.h"
 #endif
 
 #ifndef matrixstruct
-#include "../../../BrainMatrixGenerator/matrixstruct.h"
+#include "../../../BrainMatrixGenerator/includes/matrixstruct.h"
 #endif

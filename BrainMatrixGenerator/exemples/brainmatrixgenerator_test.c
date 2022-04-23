@@ -9,19 +9,19 @@
 #include <assert.h>
 
 #ifndef brainmatrixgenerator
-#include "brainmatrixgenerator.h"
+#include "../includes/brainmatrixgenerator.h"
 #endif
 
 #ifndef brainstruct
-#include "brainstruct.h"
+#include "../includes/brainstruct.h"
 #endif
 
 #ifndef randomforbrain
-#include "randomforbrain.h"
+#include "../includes/randomforbrain.h"
 #endif
 
 #ifndef matrixstruct
-#include "matrixstruct.h"
+#include "../includes/matrixstruct.h"
 #endif
 
 #define NULL ((void *)0)
