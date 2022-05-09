@@ -525,7 +525,7 @@ typedef struct MatrixBlock MatrixBlock;
       }
       else
       {
-          printf("Matrice trop grande pour être affichée..\n");
+          printf("Matrix too large for print..\n");
       }
   }
 

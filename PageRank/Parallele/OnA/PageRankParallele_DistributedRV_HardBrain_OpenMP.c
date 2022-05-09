@@ -209,7 +209,7 @@ int main(int argc, char **argv)
     if (my_rank == 0 && debug_cerveau) {printf_recap_brain(&Cerveau);}
 
     MPI_Barrier(MPI_COMM_WORLD);
-    start_brain_generation_time = my_gettimeofday(); //début de la mesure de temps de génération de la matrice A transposée
+    start_brain_generation_time = my_gettimeofday(); //début de la mesure de temps de génération de la matrice A
 
     //génération des sous-matrices au format CSR :
     //3 ALLOCATIONS : allocation de mémoire pour CSR_Row, CSR_Column et CSR_Value dans la fonction generate_csr_matrix_for_pagerank()
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
-    total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
+    total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A
 
     long * nb_connections_rows_global;
     if (debug_cerveau)
