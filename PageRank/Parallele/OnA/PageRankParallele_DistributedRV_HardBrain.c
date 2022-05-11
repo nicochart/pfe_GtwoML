@@ -255,21 +255,20 @@ int main(int argc, char **argv)
     if (debug_cerveau)
     {
         nb_connections_rows_global = MatrixDebugInfo.nb_connections;
+        nb_non_zeros = MatrixDebugInfo.cpt_values;
     }
     else
     {
-        nb_connections_rows_global = get_nnz_rows(&A_CSR, myBlock, n); //obtention du nombre de connection par neurone (nnz par ligne)
+        nb_connections_rows_global = get_nnz_rows(&A_CSR, myBlock, n); //obtention du nombre de connexion par neurone (nnz par ligne)
+        nb_non_zeros_local = A_CSR.len_values;
+        MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
     }
-
-    nb_non_zeros_local = A_CSR.len_values;
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
 
     //debug de la mémoire totale allouée
     if (debug_cerveau)
     {
         total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
         MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
-        MatrixDebugInfo.cpt_values = nb_non_zeros;
         if (my_rank == 0)
         {
             printf("Mémoire totale allouée pour le vecteur Row / le vecteur Column : %li\nNombre de cases mémoires effectivement utilisées : %li\n",MatrixDebugInfo.total_memory_allocated,MatrixDebugInfo.cpt_values);

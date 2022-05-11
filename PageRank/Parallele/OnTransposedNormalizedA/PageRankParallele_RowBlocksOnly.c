@@ -154,7 +154,6 @@ int main(int argc, char **argv)
     {
         total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
         MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
-        MatrixDebugInfo.cpt_values = nb_non_zeros;
 
         if (my_rank == 0)
         {

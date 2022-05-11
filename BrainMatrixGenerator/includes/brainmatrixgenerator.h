@@ -32,7 +32,7 @@
 //! Structure containing debug info for a generated matrix
 /*!
    Structure containing debugging information for a generated matrix. It contains :
-   The local dimension of the matrix, the types chosen for the neurons, the number of connections (number of non-zero values) per row or column (depending on the version of the generator used), number of memory cells allocated, the number of non-zero values ​​contained in the matrix
+   The local dimension of the matrix, the types chosen for the neurons, the number of connections (number of non-zero values) per row or column (depending on the version of the generator used), number of memory cells allocated, the total number of non-zero values ​​contained in the matrix (all processes)
  */
 struct DebugBrainMatrixInfo
 {
@@ -41,7 +41,7 @@ struct DebugBrainMatrixInfo
      int * types; //vecteur de taille dim_c indiquant le type choisi pour chaque neurones du cerveau
      long * nb_connections; //vecteur de taille dim_c en sortie du générateur, et de taille n (dimension totale de la matrice) après communications, indiquant le nombre de connections qu'a effectué chaque neurone.
      long total_memory_allocated; //memoire totale allouée pour Row (ou pour Column, ce sont les mêmes). Cette mémoire étant allouée dynamiquement, elle peut être plus grande que cpt_values.
-     long cpt_values; //nombre de connexions (de 1 dans la matrice générée).
+     long cpt_values; //nombre de connexions (de 1 dans la matrice générée globale - tout processus confondu).
 };
 typedef struct DebugBrainMatrixInfo DebugBrainMatrixInfo;
 
@@ -145,7 +145,7 @@ void generate_csr_brain_adjacency_matrix_for_pagerank(IntCSRMatrix *M_CSR, Matri
     if (debugInfo != NULL)
     {
         (*debugInfo).total_memory_allocated = total_memory_allocated;
-        (*debugInfo).cpt_values = (*M_CSR).len_values;
+        MPI_Allreduce(&((*M_CSR).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
 
         /* nb_connections_local_tmp contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         MPI_Allreduce(nb_connections_local_tmp, (*debugInfo).nb_connections, (*brain).dimension, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans (*debugInfo).nb_connections
@@ -250,7 +250,7 @@ void generate_csr_brain_transposed_adjacency_matrix_for_pagerank(IntCSRMatrix *M
     if (debugInfo != NULL)
     {
         (*debugInfo).total_memory_allocated = total_memory_allocated;
-        (*debugInfo).cpt_values = cpt_values;
+        MPI_Allreduce(&((*M_CSR).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         MPI_Allreduce(nb_connections_local_tmp, (*debugInfo).nb_connections, (*brain).dimension, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans (*debugInfo).nb_connections
@@ -359,7 +359,7 @@ void generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(IntCSRMatri
     if (debugInfo != NULL)
     {
         (*debugInfo).total_memory_allocated = total_memory_allocated;
-        (*debugInfo).cpt_values = cpt_values;
+        MPI_Allreduce(&((*M_CSR).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         MPI_Allreduce(nb_connections_local_tmp, (*debugInfo).nb_connections, (*brain).dimension, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans (*debugInfo).nb_connections
@@ -468,7 +468,7 @@ void generate_coo_row_transposed_adjacency_brain_matrix_for_pagerank(IntCOOMatri
     if (debugInfo != NULL)
     {
         (*debugInfo).total_memory_allocated = total_memory_allocated;
-        (*debugInfo).cpt_values = cpt_values;
+        MPI_Allreduce(&((*M_CSR).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         MPI_Allreduce(nb_connections_local_tmp, (*debugInfo).nb_connections, (*brain).dimension, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans (*debugInfo).nb_connections

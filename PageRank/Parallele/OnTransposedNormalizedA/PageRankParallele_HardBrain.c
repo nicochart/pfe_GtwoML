@@ -201,14 +201,20 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 
-    nb_non_zeros_local = A_CSR.len_values;
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    if (debug_cerveau)
+    {
+        nb_non_zeros = MatrixDebugInfo.cpt_values;
+    }
+    else
+    {
+        nb_non_zeros_local = A_CSR.len_values;
+        MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    }
 
     if (debug_cerveau)
     {
         total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
         MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
-        MatrixDebugInfo.cpt_values = nb_non_zeros;
 
         if (my_rank == 0)
         {

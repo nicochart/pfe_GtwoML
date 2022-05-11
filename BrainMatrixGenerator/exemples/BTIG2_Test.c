@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
     struct MatrixBlock myBlock; //contiendra toutes les informations du block local (processus), indice de ligne/colonne dans la grille 2D, infos pour le PageRank.. voir matrixstruct.h
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
+    long total_memory_allocated_local,nb_zeros;
     long *nb_connections_local_tmp,*nb_connections_tmp;
     int *neuron_types;
 
@@ -164,10 +164,6 @@ int main(int argc, char **argv)
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //end of time measurement for adjacenct matrix (A_CSR) generation
 
-    nb_non_zeros_local = A_CSR.len_values; //=MatrixDebugInfo.cpt_values atm
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
-    MatrixDebugInfo.cpt_values = nb_non_zeros; //TODO : make this done in the generator
-
     //Total allocated memory
     total_memory_allocated_local = MatrixDebugInfo.total_memory_allocated;
     MPI_Allreduce(&total_memory_allocated_local, &(MatrixDebugInfo.total_memory_allocated), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les total_memory_allocated_local dans MatrixDebugInfo.total_memory_allocated.
@@ -175,7 +171,7 @@ int main(int argc, char **argv)
 
     //Matrix prints (only if there is less than 65 neurons)
     MPI_Barrier(MPI_COMM_WORLD);
-    if (my_rank == 0) {printf("-------- Matrices:\n");}
+    if (my_rank == 0) {printf("\n-------- Matrices:\n");}
     MPI_Barrier(MPI_COMM_WORLD);
     for (k=0;k<p;k++)
     {
@@ -227,7 +223,7 @@ int main(int argc, char **argv)
     //Print global information
     if (my_rank==0)
     {
-        printf("\nOverall percentage of non-zero values : %.2f%, exptected : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
+        printf("\nOverall percentage of non-zero values : %.2f%, exptected : %.2f%\n\n",((double) MatrixDebugInfo.cpt_values/(double) size) * 100,sum_pourcentage_espere/ (double) n);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
