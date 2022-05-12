@@ -117,7 +117,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    /* Remplissage de la structure MatrixBlock : donne les informations sur le block local (processus) + infos bonus pour le PageRank et les communicateurs */
+    /* Remplissage de la structure MatrixBlock : donne les informations sur le block local (processus) */
     myBlock = fill_matrix_block_info(my_rank, nb_blocks_row, nb_blocks_column, n);
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
 
     /* Step 2 : Matrix generation */
     struct DebugBrainMatrixInfo MatrixDebugInfo;
-    generate_csr_brain_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
+    generate_csr_brain_transposed_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
 
     /*------------------------------------------------------------------------------------------------------------------------------------*/
     /*------------------------------------------- BRAIN MATRIX GENERATION ENDS -----------------------------------------------------------*/
@@ -198,6 +198,10 @@ int main(int argc, char **argv)
     double pourcentage_espere, sum_pourcentage_espere;
     for(i=0;i<n;i++) //Run through neurons
     {
+        partie = get_brain_part_ind(i, &Cerveau);
+        type = neuron_types[i];
+        pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
+
         partie = get_brain_part_ind(i, &Cerveau);
         type = neuron_types[i];
         pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);

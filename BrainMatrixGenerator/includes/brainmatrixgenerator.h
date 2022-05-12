@@ -468,7 +468,7 @@ void generate_coo_row_transposed_adjacency_brain_matrix_for_pagerank(IntCOOMatri
     if (debugInfo != NULL)
     {
         (*debugInfo).total_memory_allocated = total_memory_allocated;
-        MPI_Allreduce(&((*M_CSR).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
+        MPI_Allreduce(&((*M_COO).len_values), &((*debugInfo).cpt_values), 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM des nombres de valeurs dans les sous matrices dans cpt_values, nombre de valeurs non nulles global
 
         /* MatrixDebugInfo.nb_connections contient actuellement (dans chaque processus) le nombre de connexions faites LOCALEMENT par tout les neurones par colonne. */
         MPI_Allreduce(nb_connections_local_tmp, (*debugInfo).nb_connections, (*brain).dimension, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans (*debugInfo).nb_connections
