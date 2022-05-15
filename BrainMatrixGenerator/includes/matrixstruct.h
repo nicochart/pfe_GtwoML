@@ -76,7 +76,8 @@ typedef struct DoubleCSRMatrix DoubleCSRMatrix;
     PageRank info :
     Column index of the "root" block (source) of the communication-redistribution of the result vector,
     Result vector calculation group index
-    Column index of the block in the result vector calculation group (groups of column blocks)
+    Row index of the block in the result vector calculation group
+    Column index of the block in the result vector calculation group
     Need Inter-group Communication Group Index (useful for retrieving the final result)
     Starting index in column in the result vector calculation group (included)
     Starting index online in the result vector calculation group (included), useful in the PageRank to fetch values ​​in the vector q
@@ -95,7 +96,8 @@ struct MatrixBlock
 
     int pr_result_redistribution_root; //Indice de colonne du block "root" (source) de la communication-redistribution du vecteur résultat
     int result_vector_calculation_group; //Indice de groupe de calcul du vecteur résultat
-    int indc_in_result_vector_calculation_group; //Indice de colonne du block dans le groupe de calcul du vecteur résultat (groupes de blocks colonnes)
+    int indl_in_result_vector_calculation_group; //Indice de ligne du block dans le groupe de calcul du vecteur résultat
+    int indc_in_result_vector_calculation_group; //Indice de colonne du block dans le groupe de calcul du vecteur résultat
     int inter_result_vector_need_group_communicaton_group; //Indice du Groupe de communication inter-groupe de besoin (utile pour récupérer le résultat final)
     long startColumn_in_result_vector_calculation_group; //Indice de départ en colonne dans le groupe de calcul du vecteur résultat (inclu)
     long startRow_in_result_vector_calculation_group; //Indice de départ en ligne dans le groupe de calcul du vecteur résultat (inclu), utile dans le PageRank pour aller chercher des valeurs dans le vecteur q
@@ -631,10 +633,50 @@ void printf_csr_matrix_int(IntCSRMatrix * M)
       local_result_vector_size_row_blocks = nb_blocks_row / pgcd_nbr_nbc;
       local_result_vector_size_column = local_result_vector_size_column_blocks * MBlock.dim_c;
       MBlock.result_vector_calculation_group = MBlock.indc / local_result_vector_size_column_blocks;
+      MBlock.indl_in_result_vector_calculation_group = MBlock.indl;
       MBlock.indc_in_result_vector_calculation_group = MBlock.indc % local_result_vector_size_column_blocks;
       MBlock.inter_result_vector_need_group_communicaton_group = (MBlock.indl % local_result_vector_size_row_blocks) * nb_blocks_column + MBlock.indc;
       MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * MBlock.indc_in_result_vector_calculation_group;
       MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * MBlock.indl % local_result_vector_size_row_blocks;
       MBlock.my_result_vector_calculation_group_rank = MBlock.indc_in_result_vector_calculation_group + MBlock.indl * local_result_vector_size_column_blocks;
+      return MBlock;
+  }
+
+  //! Function that fills and returns a MatrixBlock structure with informations for pagerank and basic information according to the parameters received.
+  /*
+     Returns a MatrixBlock structure according to the parameters received. The structure is filled for a PageRank with distributed result vector, applied to a transposed adjacency matrix
+   * @param[in] rank {int} : mpi process rank
+   * @param[in] nb_blocks_row {int} : number of processes (blocks) on rows (in the process grid)
+   * @param[in] nb_blocks_column {int} : number of processes (blocks) on columns (in the process grid)
+   * @param[in] n (long) : global (total) matrix dimension
+   * @return MBlock {MatrixBlock} : structure containing basic information of the Matrix Block (process), and information for PageRank
+   */
+  MatrixBlock fill_matrix_block_info_transposed_adjacency_prv_pagerank(int rank, int nb_blocks_row, int nb_blocks_column, long n)
+  {
+      /*
+      Rempli une structure MatrixBlock en fonction des paramètres reçu, et la retourne
+      La structure est remplie pour un PageRank avec vecteur résultat réparti, appliqué à une matrice d'adjacence transposée
+      Les explications sur ce remplissage sont disponible dans le pdf "explication du PageRank version 5"
+      */
+      int pgcd_nbr_nbc, local_result_vector_size_row_blocks, local_result_vector_size_column_blocks;
+      double grid_dim_factor;
+
+      int tmp_r = nb_blocks_row, tmp_c = nb_blocks_column;
+      while (tmp_c!=0) {pgcd_nbr_nbc = tmp_r % tmp_c; tmp_r = tmp_c; tmp_c = pgcd_nbr_nbc;}
+      pgcd_nbr_nbc = tmp_r;
+
+      struct MatrixBlock MBlock = fill_matrix_block_info(rank, nb_blocks_row, nb_blocks_column, n);
+
+      grid_dim_factor = (double) nb_blocks_column / (double) nb_blocks_row;
+      MBlock.pr_result_redistribution_root = (int) MBlock.indc / grid_dim_factor;
+      local_result_vector_size_column_blocks = nb_blocks_column / pgcd_nbr_nbc;
+      local_result_vector_size_row_blocks = nb_blocks_row / pgcd_nbr_nbc;
+      MBlock.result_vector_calculation_group = MBlock.indl / local_result_vector_size_row_blocks;
+      MBlock.indl_in_result_vector_calculation_group = MBlock.indl % local_result_vector_size_row_blocks;
+      MBlock.indc_in_result_vector_calculation_group = MBlock.indc;
+      MBlock.inter_result_vector_need_group_communicaton_group = (MBlock.indc % local_result_vector_size_column_blocks) * nb_blocks_row + MBlock.indl;
+      MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * MBlock.indc % local_result_vector_size_column_blocks;
+      MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * MBlock.indl_in_result_vector_calculation_group;
+      MBlock.my_result_vector_calculation_group_rank = MBlock.indl_in_result_vector_calculation_group * local_result_vector_size_row_blocks + MBlock.indc;
       return MBlock;
   }
