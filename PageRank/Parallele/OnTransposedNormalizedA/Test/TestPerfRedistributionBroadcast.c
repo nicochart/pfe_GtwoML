@@ -68,7 +68,10 @@ int main(int argc, char **argv)
     double * vector;
     long vector_size;
 
+    double min_time, max_time, sum_time = 0;
     double start_time, total_time;
+
+    int cpt_iteration, nb_iteration_done = 0;
 
     if (argc < 2) {if (my_rank==0) {printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\nVous pouvez aussi préciser le nombre de blocks en ligne et en colonne dans la matrice de blocks : %s n nb_blocks_row nb_blocks_column\n", argv[0],argv[0]);} exit(1);}
     n = atoll(argv[1]); size = n * n;
@@ -98,19 +101,29 @@ int main(int argc, char **argv)
     vector_size = nb_ligne * nb_blocks_row / pgcd(nb_blocks_row, nb_blocks_column);
     if (my_rank == 0) {printf("Taille du vecteur = %li * %i / %i = %li\n",nb_ligne, nb_blocks_row, pgcd(nb_blocks_row, nb_blocks_column), vector_size);}
     vector = (double *)malloc(vector_size * sizeof(double));
-    for (i=0;i<vector_size;i++) {vector[i] = random_between_0_and_1() * 100;}
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    start_time = my_gettimeofday(); //début mesure de temps
+    for (cpt_iteration=0; cpt_iteration<50; cpt_iteration++)
+    {
+        for (i=0;i<vector_size;i++) {vector[i] = random_between_0_and_1();}
 
-    /********* DEBUT COMMUNICATION BROADCAST DE LA REDISTRIBUTION *********/
-    MPI_Bcast(vector, vector_size, MPI_DOUBLE, myBlock.pr_result_redistribution_root, COLUMN_COMM); //chaque processus d'une "colonne de processus" (dans la grille) contient le même vector de taille vector_size
-    /********* FIN COMMUNICATION BROADCAST DE LA REDISTRIBUTION *********/
+        MPI_Barrier(MPI_COMM_WORLD);
+        start_time = my_gettimeofday(); //début mesure de temps
 
-    MPI_Barrier(MPI_COMM_WORLD);
-    total_time = my_gettimeofday() - start_time; //fin mesure de temps
+        /********* DEBUT COMMUNICATION BROADCAST DE LA REDISTRIBUTION *********/
+        MPI_Bcast(vector, vector_size, MPI_DOUBLE, myBlock.pr_result_redistribution_root, COLUMN_COMM); //chaque processus d'une "colonne de processus" (dans la grille) contient le même vector de taille vector_size
+        /********* FIN COMMUNICATION BROADCAST DE LA REDISTRIBUTION *********/
 
-    if (my_rank == 0) {printf("Temps écoulé : %.5f s\n", total_time);}
+        MPI_Barrier(MPI_COMM_WORLD);
+        total_time = my_gettimeofday() - start_time; //fin mesure de temps
+
+        if (my_rank == 0) {printf("[Mesure %i] Temps écoulé : %.5f s\n", cpt_iteration+1, total_time);}
+        if (cpt_iteration == 0) {min_time = total_time; max_time = total_time;}
+        else {if (min_time > total_time) {min_time = total_time;} if (max_time < total_time) {max_time = total_time;}}
+        sum_time += total_time;
+        nb_iteration_done++;
+    }
+
+    if (my_rank == 0) {printf("Temps moyen écoulé lors d'une itération : %.5f s\nTemps minimum écoulé lors d'une itération : %.5f s\nTemps maximum écoulé lors d'une itération : %.5f s\n", sum_time / nb_iteration_done, min_time, max_time);}
 
     free(vector);
     MPI_Finalize();
