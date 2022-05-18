@@ -637,7 +637,7 @@ void printf_csr_matrix_int(IntCSRMatrix * M)
       MBlock.indc_in_result_vector_calculation_group = MBlock.indc % local_result_vector_size_column_blocks;
       MBlock.inter_result_vector_need_group_communicaton_group = (MBlock.indl % local_result_vector_size_row_blocks) * nb_blocks_column + MBlock.indc;
       MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * MBlock.indc_in_result_vector_calculation_group;
-      MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * MBlock.indl % local_result_vector_size_row_blocks;
+      MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * (MBlock.indl % local_result_vector_size_row_blocks);
       MBlock.my_result_vector_calculation_group_rank = MBlock.indc_in_result_vector_calculation_group + MBlock.indl * local_result_vector_size_column_blocks;
       return MBlock;
   }
@@ -675,7 +675,7 @@ void printf_csr_matrix_int(IntCSRMatrix * M)
       MBlock.indl_in_result_vector_calculation_group = MBlock.indl % local_result_vector_size_row_blocks;
       MBlock.indc_in_result_vector_calculation_group = MBlock.indc;
       MBlock.inter_result_vector_need_group_communicaton_group = (MBlock.indc % local_result_vector_size_column_blocks) * nb_blocks_row + MBlock.indl;
-      MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * MBlock.indc % local_result_vector_size_column_blocks;
+      MBlock.startColumn_in_result_vector_calculation_group = MBlock.dim_c * (MBlock.indc % local_result_vector_size_column_blocks);
       MBlock.startRow_in_result_vector_calculation_group = MBlock.dim_l * MBlock.indl_in_result_vector_calculation_group;
       MBlock.my_result_vector_calculation_group_rank = MBlock.indl_in_result_vector_calculation_group * local_result_vector_size_row_blocks + MBlock.indc;
       return MBlock;
