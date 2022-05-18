@@ -91,7 +91,6 @@ int main(int argc, char **argv)
     int debug_matrix_block=1; //passer à 1 pour afficher les print de débuggage du block de matrice
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
-    int debug_pagerank=0; //passer à 1 pour afficher les débugs du pagerank
     int debug_print_full_pagerank_result=0; //passer à 1 pour allgather et afficher le vecteur résultat complet
     long i,j,k; //pour les boucles
     long n;
@@ -299,13 +298,6 @@ int main(int argc, char **argv)
     double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc;
     int nb_elements_ligne;
 
-    //utilisé uniquement si debug_pagerank est activé
-    double *q_global;
-    if (debug_pagerank)
-    {
-        q_global = (double *)malloc(n * sizeof(double));
-    }
-
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
     //allocation mémoire pour old_q et new_q, et initialisation de new_q
@@ -319,9 +311,13 @@ int main(int argc, char **argv)
     if (my_rank == 0) {printf("Running PageRank..\n");}
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
 
+    /***************************************************************************************************************/
+    /****************************************** DEBUT ALGORITHME PAGERANK ******************************************/
+    /***************************************************************************************************************/
     while (error_vect > epsilon && !one_in_vector(morceau_new_q,local_result_vector_size) && cpt_iterations<maxIter)
     {
-        if (my_rank == 0 /*&& debug*/) {printf("Itération %i, error = %f\n",cpt_iterations,error_vect);}
+        /************ Préparation pour l'itération ************/
+        if (my_rank == 0 && debug) {printf("Itération %i, error = %f\n",cpt_iterations,error_vect);}
         //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
         tmp = morceau_new_q;
         morceau_new_q = morceau_old_q;
@@ -329,17 +325,16 @@ int main(int argc, char **argv)
         tmp_sum = sum_totale_new_q;
         sum_totale_new_q = sum_totale_old_q;
         sum_totale_old_q = tmp_sum;
-        //-- itération sur new_q --
+        //les itérations se font sur new_q
 
-        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
         //réinitialisation morceau_new_q_local pour nouvelle itération
         for (i=0; i<local_result_vector_size; i++)
         {
             morceau_new_q_local[i] = 0;
         }
 
-        // calcul du produit matrice-vecteur new_q= P * old_q et de la somme des carrés total
-        sum_new_q = 0;
+        /************ Produit matrice-vecteur ************/
+        //Produit matrice-vecteur new_q = P * old_q LOCAL
         for(i=0; i<nb_ligne; i++)
         {
             nb_elements_ligne = nb_connections_rows_global[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
@@ -349,60 +344,39 @@ int main(int argc, char **argv)
                 morceau_new_q_local[myBlock.startColumn_in_result_vector_calculation_group + A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
             }
         }
-
-        if (/*debug_pagerank && my_rank % nb_blocks_column*/ debug_pagerank && myBlock.result_vector_calculation_group == 0)
-        {
-            printf("(%i,%i) rank %i, morceau q local avant reduce : ",myBlock.indl,myBlock.indc,my_rank);
-            for(k=0;k<local_result_vector_size;k++) {printf("%.2f ",morceau_new_q_local[k]);}
-            printf(", le to_add était de %f\n",to_add);
-        }
-
+        
+        //Produit matrice-vecteur new_q = P * old_q GLOBAL (Reduce)
         MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
         MPI_Barrier(MPI_COMM_WORLD);
 
-        if (/*debug_pagerank && my_rank % nb_blocks_column*/ debug_pagerank && myBlock.result_vector_calculation_group == 0)
-        {
-            printf("(%i,%i) rank %i, morceau q local après reduce : ",myBlock.indl,myBlock.indc,my_rank);
-            for(k=0;k<local_result_vector_size;k++) {printf("%.2f ",morceau_new_q[k]);}
-            printf("\n");
-        }
-
-        //DEL pourquoi mettre ça dans le boucle sur les lignes ?? et pourquoi faire le allreduce après ??? on ajoute plein de fois le to_add
-        //Multiplication par Beta et ajout de norme(old_q) * (1-beta) / n
+        /************ Amortissement ************/
+        //Multiplication du vecteur résultat par le facteur d'amortissement beta et ajout de norme(old_q) * (1-beta) / n
+        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
         for (k=myBlock.startColumn_in_result_vector_calculation_group; k<myBlock.startColumn_in_result_vector_calculation_group+nb_colonne; k++)
         {
             morceau_new_q_local[k] = morceau_new_q_local[k] * beta + to_add; //au fibal new_q = beta * P.old_q + norme(old_q) * (1-beta) / n    (la partie droite du + étant ajoutée à l'initialisation)
         }
 
-        //Redistribution
-        //if (debug_pagerank && myBlock.indc == myBlock.pr_result_redistribution_root) {printf("Communication du processus root=%i (indice %i dans le communicateur) vers les autres de la même ligne de %i éléments du nouveau vecteur q\n", myBlock.indl * nb_blocks_column + myBlock.indl,myBlock.pr_result_redistribution_root,local_result_vector_size);}
+        /************ Redistribution ************/
         MPI_Bcast(morceau_new_q, local_result_vector_size, MPI_DOUBLE, myBlock.pr_result_redistribution_root, ROW_COMM); //chaque processus d'une s"ligne de processus" (dans la grille) contient le même morceau de new_q
         MPI_Barrier(MPI_COMM_WORLD);
 
-        //étape 3 : normalisation de q
+        /************ Normalisation du nouveau vecteur résultat ************/
+        sum_new_q = 0;
         for (i=0;i<local_result_vector_size;i++) {sum_new_q += morceau_new_q[i];}
         MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
         for (i=0;i<local_result_vector_size;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;} //normalisation avec sum totale (tout processus confondu)
 
-        //-- fin itération--
+        /************ Opérations de Fin d'itération ************/
         cpt_iterations++;
         error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne); //calcul de l'erreur local
         MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
         MPI_Barrier(MPI_COMM_WORLD);
-
-        //debug
-        if (debug_pagerank)
-        {
-            MPI_Allgather(morceau_new_q, local_result_vector_size, MPI_DOUBLE, q_global, local_result_vector_size, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans q_global, dans tout les processus
-            if (my_rank == 0)
-            {
-                printf("q actuel : ");
-                for(i=0;i<n;i++) {printf("%.2f ",q_global[i]);}
-                printf("\n");
-            }
-        }
     }
-    //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
+    /***************************************************************************************************************/
+    /******************************************* FIN ALGORITHME PAGERANK *******************************************/
+    /***************************************************************************************************************/
+    //cpt_iterations contient le nombre d'itérations faites, morceau_new_q sont les morceaux du vecteur contenant le PageRank
 
     MPI_Barrier(MPI_COMM_WORLD);
     total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
@@ -483,7 +457,6 @@ int main(int argc, char **argv)
     }
 
     free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
-    if (debug_pagerank) {free(q_global);}
     if (debug_print_full_pagerank_result) {free(pagerank_result);}
     free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
     free(neuron_types); //Revient à faire MatrixDebugInfo.types est free plus haut

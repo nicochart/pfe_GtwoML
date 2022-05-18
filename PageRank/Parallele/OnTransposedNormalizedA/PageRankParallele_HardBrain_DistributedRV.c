@@ -311,8 +311,12 @@ int main(int argc, char **argv)
     if (my_rank == 0) {printf("\nRunning PageRank..\n");}
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
 
+    /***************************************************************************************************************/
+    /****************************************** DEBUT ALGORITHME PAGERANK ******************************************/
+    /***************************************************************************************************************/
     while (error_vect > epsilon && !one_in_vector(morceau_new_q,local_result_vector_size) && cpt_iterations<maxIter)
     {
+        /************ Préparation pour l'itération ************/
         //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
         tmp = morceau_new_q;
         morceau_new_q = morceau_old_q;
@@ -320,17 +324,16 @@ int main(int argc, char **argv)
         tmp_sum = sum_totale_new_q;
         sum_totale_new_q = sum_totale_old_q;
         sum_totale_old_q = tmp_sum;
-        //-- itération sur new_q --
+        //les itérations se font sur new_q
 
-        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
         //réinitialisation morceau_new_q_local pour nouvelle itération
         for (i=0; i<local_result_vector_size; i++)
         {
             morceau_new_q_local[i] = 0;
         }
 
-        // calcul du produit matrice-vecteur new_q= P * old_q et de la somme des carrés total
-        sum_new_q = 0;
+        /************ Produit matrice-vecteur ************/
+        //Produit matrice-vecteur new_q = P * old_q LOCAL
         for(i=0; i<nb_ligne; i++)
         {
             for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++)
@@ -341,36 +344,38 @@ int main(int argc, char **argv)
             }
         }
 
+        //Produit matrice-vecteur new_q = P * old_q GLOBAL (Reduce)
         MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
         MPI_Barrier(MPI_COMM_WORLD);
 
-        //Multiplication par Beta et ajout de norme(old_q) * (1-beta) / n
+        /************ Amortissement ************/
+        //Multiplication du vecteur résultat par le facteur d'amortissement beta et ajout de norme(old_q) * (1-beta) / n
+        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
         for (k=myBlock.startColumn_in_result_vector_calculation_group; k<myBlock.startColumn_in_result_vector_calculation_group+nb_colonne; k++)
         {
             morceau_new_q_local[k] = morceau_new_q_local[k] * beta + to_add; //au fibal new_q = beta * P.old_q + norme(old_q) * (1-beta) / n    (la partie droite du + étant ajoutée à l'initialisation)
         }
 
-        //afficher ici tout les vecteurs dans tout les processus, pour voir si on a le même résultat partout dans les groupes de calcul
-
-        //Redistribution
+        /************ Redistribution ************/
         MPI_Bcast(morceau_new_q, local_result_vector_size, MPI_DOUBLE, myBlock.pr_result_redistribution_root, COLUMN_COMM); //chaque processus d'une s"ligne de processus" (dans la grille) contient le même morceau de new_q
         MPI_Barrier(MPI_COMM_WORLD);
 
-        //afficher ici tout les vecteurs dans tout les processus, pour voir si la communication a bien été faite
-
-        //étape 3 : normalisation de q
+        /************ Normalisation du nouveau vecteur résultat ************/
+        sum_new_q = 0;
         for (i=0;i<local_result_vector_size;i++) {sum_new_q += morceau_new_q[i];}
         MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
-        //La somme totale (norme 1) doit être égale à 1 ?
         for (i=0;i<local_result_vector_size;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;} //normalisation avec sum totale (tout processus confondu)
 
-        //-- fin itération--
+        /************ Opérations de Fin d'itération ************/
         cpt_iterations++;
         error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne); //calcul de l'erreur local
         MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
         MPI_Barrier(MPI_COMM_WORLD);
     }
-    //fin du while : cpt_iterations contient le nombre d'itérations faites, new_q contient la valeur du vecteur PageRank
+    /***************************************************************************************************************/
+    /******************************************* FIN ALGORITHME PAGERANK *******************************************/
+    /***************************************************************************************************************/
+    //cpt_iterations contient le nombre d'itérations faites, morceau_new_q sont les morceaux du vecteur contenant le PageRank
 
     MPI_Barrier(MPI_COMM_WORLD);
     total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
