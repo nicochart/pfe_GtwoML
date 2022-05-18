@@ -1,4 +1,7 @@
-/*PageRank non pondéré parallele utilisant le générateur V3 (Matrice parallèle avec blocks sur les ligne uniquement). Le vecteur résultat n'est pas distribué.*/
+/*
+PageRank non pondéré parallele utilisant le générateur V4 (Matrice parallèle avec blocks sur les ligne et les colonnes).
+Le vecteur résultat n'est pas encore distribué, mais le sera.
+*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
@@ -75,46 +78,81 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
-    int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
+    int debug_cerveau=1; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
     long i,j,k; //pour les boucles
     long n;
+    int q = sqrt(p);
+    int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
     struct MatrixBlock myBlock; //contiendra toutes les information du block (processus) local
     long long size;
     long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
     long *nb_connections_local_tmp,*nb_connections_tmp;
-    int *neuron_types, *local_types;
+    int *neuron_types;
 
     double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
 
-    //allocation mémoire et initialisation d'une liste de taille "nombre de processus" contenant les pourcentages de 0 que l'on souhaite pour chaque bloc
-    int *zeros_percentages = (int *)malloc(p * sizeof(int)); for (i=0;i<p;i++) {zeros_percentages[i] = 75;}
-
     if (argc < 2)
     {
-        printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\n Vous pouvez aussi indiquer des pourcentages de 0 pour chaque bloc après le n.\n", argv[0]);
+        if (my_rank==0) {printf("Veuillez entrer la taille de la matrice après le nom de l'executable : %s n\nVous pouvez aussi préciser le nombre de blocks en ligne et en colonne dans la matrice de blocks : %s n nb_blocks_row nb_blocks_column\n", argv[0],argv[0]);}
         exit(1);
     }
     n = atoll(argv[1]);
-    if (argc > 2)
+    if (argc < 4)
     {
-        for (i=2;i<argc && i<p+2;i++)
-        {
-            *(zeros_percentages+i-2) = 100 - atoll(argv[i]);
-        }
+        if (my_rank == 0) {printf("Si vous voulez saisir le nombre de blocs (parallèles), veuillez les préciser dans les deux dimensions : %s n nb_blocks_row nb_blocks_column\nValeur prise par défaut : sqrt(%i) = %i\n", argv[0], p, q);}
+    }
+    else if (argc >= 4) //dans le cas où on a des paramètres correspondant au nombre de blocs dans les dimensions
+    {
+        nb_blocks_row = atoll(argv[2]);
+        nb_blocks_column = atoll(argv[3]);
     }
 
-    if (debug && my_rank == 0)
+    if (nb_blocks_row * nb_blocks_column != p)
     {
-        printf("Liste des pourcentages de 0 dans chaque bloc :\n");
-        for (i=0;i<p;i++) {printf("%i ",zeros_percentages[i]);}
-        printf("\n");
+        if (my_rank == 0)
+        {
+            printf("Erreur : %i * %i != %i. Usage : %s n nb_blocks_row nb_blocks_column (les nombres de blocs par ligne/colonne multipliés doit être égale à %i, le nombre de coeurs alloués)\n", nb_blocks_row, nb_blocks_column, p, argv[0], p);
+            if (argc < 4)
+            {
+                printf("nb_blocks_row nb_blocks_column n'étant pas précisés, la valeur prise par défaut serait sqrt(%i).. Mais le nombre de coeurs disponible (%i) n'a pas de racine entière..\nNous ne pouvons pas prendre cette valeur par défaut", p, p);
+            }
+        }
+        exit(1);
     }
 
     size = n * n;
-    long nb_ligne = n/p; //nombre de lignes par bloc
+    long nb_ligne = n/nb_blocks_row, nb_colonne = n/nb_blocks_column; //nombre de lignes/colonnes par bloc
+
+    if (nb_ligne * nb_blocks_row != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les lignes (%i)\n",n,nb_blocks_row);}
+    }
+    if (nb_colonne * nb_blocks_column != n)
+    {
+        if (my_rank ==0) {printf("Erreur : n (%li) n'est pas divisible par le nombre de blocks sur les colonnes (%i)\n",n,nb_blocks_column);}
+    }
+    if (nb_ligne * nb_blocks_row != n || nb_colonne * nb_blocks_column != n)
+    {
+        exit(1);
+    }
 
     /* Remplissage de la structure MatrixBlock : donne les informations sur le block local (processus) */
-    myBlock = fill_matrix_block_info(my_rank, p, 1, n);
+    myBlock = fill_matrix_block_info(my_rank, nb_blocks_row, nb_blocks_column, n);
+
+    /* Communicateurs par ligne et colonne */
+    MPI_Comm ROW_COMM;
+    MPI_Comm_split(MPI_COMM_WORLD, myBlock.indl, myBlock.indc, &ROW_COMM);
+
+    MPI_Comm COLUMN_COMM;
+    MPI_Comm_split(MPI_COMM_WORLD, myBlock.indc, myBlock.indl, &COLUMN_COMM);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank == 0)
+    {
+        printf("----------------------\nBilan de votre matrice :\n");
+        printf("Taille : %li * %li = %li\n",n,n,size);
+        printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
+    }
 
     //Cerveau écrit en dur
     Brain Cerveau = get_hard_brain(n); //Cerveau défini dans hardbrain.h
@@ -127,28 +165,54 @@ int main(int argc, char **argv)
     //3 ALLOCATIONS : allocation de mémoire pour CSR_Row, CSR_Column et CSR_Value dans la fonction generate_csr_matrix_for_pagerank()
     struct IntCSRMatrix A_CSR;
 
-    local_types = (int *)malloc(nb_ligne * sizeof(int)); //vecteur local (spécifique à chaque processus) contenant les types des neurones my_rank * nb_ligne à (my_rank + 1) * nb_ligne
     neuron_types = (int *)malloc(n * sizeof(int)); //vecteur contenant les types de tout les neurones
+
     //choix du type de neurone pour chaque neurone du cerveau
-    generate_neuron_types(&Cerveau, my_rank*nb_ligne, nb_ligne, local_types);
-    MPI_Allgather(local_types, nb_ligne, MPI_INT, neuron_types, nb_ligne,  MPI_INT, MPI_COMM_WORLD); //réunion dans chaque processus des types de tout les neurones (pour génération)
+    if (myBlock.indc == 0) //choix des processus qui vont définir les types de neurones
+    {
+        if (debug) {printf("Le processus %i répond à l'appel, il va s'occuper des neurones %li à %li\n",my_rank,myBlock.indl*nb_ligne,(myBlock.indl+1)*nb_ligne);}
+        generate_neuron_types(&Cerveau, myBlock.indl*nb_ligne, nb_ligne, neuron_types + myBlock.indl*nb_ligne);
+    }
+
+    for (i=0;i<nb_blocks_row;i++)
+    {
+        if (my_rank==0 && debug) {printf("Communication du processus %i vers les autres de %i neurones\n",i*nb_blocks_column,nb_ligne);}
+        MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (my_rank==0 && debug)
+    {
+        for (i=0;i<n;i++)
+        {
+            printf("%i ",neuron_types[i]);
+        }
+        printf("\n");
+    }
 
     //Génération de la matrice CSR à partir du cerveau
     struct DebugBrainMatrixInfo MatrixDebugInfo;
     if (debug_cerveau)
     {
-        generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, &MatrixDebugInfo);
+        generate_csr_brain_transposed_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, &MatrixDebugInfo);
     }
     else
     {
-        generate_csr_row_transposed_adjacency_brain_matrix_for_pagerank(&A_CSR, my_rank*nb_ligne, &Cerveau, neuron_types, nb_ligne, n, NULL);
+        generate_csr_brain_transposed_adjacency_matrix_for_pagerank(&A_CSR, myBlock, &Cerveau, neuron_types, NULL);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
     total_brain_generation_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps de génération de la matrice A transposée
 
-    nb_non_zeros_local = A_CSR.len_values;
-    MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    if (debug_cerveau)
+    {
+        nb_non_zeros = MatrixDebugInfo.cpt_values;
+    }
+    else
+    {
+        nb_non_zeros_local = A_CSR.len_values;
+        MPI_Allreduce(&nb_non_zeros_local, &nb_non_zeros, 1, MPI_LONG, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les nb_non_zeros_local dans nb_non_zeros
+    }
 
     if (debug_cerveau)
     {
@@ -192,7 +256,7 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
 
     //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc,morceau_new_q[nb_ligne];
+    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc_local,sc,morceau_new_q[nb_ligne];
 
     //init variables PageRank
     beta = 1; error_vect=INFINITY;
@@ -219,11 +283,12 @@ int main(int argc, char **argv)
         sum_new_q = 0;
         for(i=0; i<nb_ligne; i++)
         {
-            sc = 0; //scalaire
+            sc_local = 0; //scalaire "local" (on doit les additionner sur les lignes pour l'avoir au complet)
             for (j=P_CSR.Row[i]; j<P_CSR.Row[i+1]; j++)
             {
-                sc += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
+                sc_local += P_CSR.Value[j] * old_q[P_CSR.Column[j]]; //sc = ligne de P * vecteur old_q
             }
+            MPI_Allreduce(&sc_local, &sc, 1, MPI_DOUBLE, MPI_SUM, ROW_COMM); //Somme sur les lignes des scalaires
             //étape 1 : new_q = beta * P.old_q
             morceau_new_q[i] = beta * sc; //new_q[i] = beta * ligneP[i] * old_q
             //étape 2 : (chaque element) newq += norme(old_q) * (1-beta) / n
@@ -231,9 +296,9 @@ int main(int argc, char **argv)
             morceau_new_q[i] = morceau_new_q[i] + to_add;
             sum_new_q  += sc;
         }
-        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD); //somme MPI_SUM de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
+        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, COLUMN_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
 
-        MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, MPI_COMM_WORLD); //récupération des morceaux de new_q dans new_q, dans tout les processus
+        MPI_Allgather(morceau_new_q, nb_ligne, MPI_DOUBLE, new_q, nb_ligne,  MPI_DOUBLE, COLUMN_COMM); //récupération par colonne des morceaux de new_q dans new_q, dans tout les processus
         //étape 3 : normalisation de q
         for (i=0;i<n;i++) {new_q[i] *= 1/sum_totale_new_q;}
 
@@ -252,62 +317,32 @@ int main(int argc, char **argv)
     total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
-    double sum_pourcentage_espere = 0;
+    int partie, type;
+    long nbco;
+    double pourcentage_espere, sum_pourcentage_espere;
     if (debug_cerveau)
     {
-        long nbco;
-        int partie,type;
-        double pourcentage_espere,sum_pourcentage_espere_local = 0;
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (my_rank == 0) {printf("Matrice A transposée :\n");}
-        MPI_Barrier(MPI_COMM_WORLD);
-        for (k=0;k<p;k++)
+        for(i=0;i<n;i++) // Parcours des neurones
         {
-            MPI_Barrier(MPI_COMM_WORLD);
-            if (my_rank == k)
+            partie = get_brain_part_ind(i, &Cerveau);
+            type = neuron_types[i];
+            pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
+            nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
+            if (my_rank == 0)
             {
-                for (i=0;i<nb_ligne;i++)
-                {
-                    if (n<=32) //si la dimension de la matrice est inférieur ou égale à 32, on peut l'afficher
-                    {
-                        for (j=0;j<n;j++)
-                        {
-                            printf("%i ", get_csr_matrix_value_int(i, j, &A_CSR));
-                        }
-                    }
-                    else if (nb_ligne <= 64) //affichage seulement si le nombre de ligne par processus est inférieur ou égal à 64
-                    {
-                        nbco = MatrixDebugInfo.nb_connections[i];
-                        printf("%03li \"0\" et %03li \"1\" -",n-nbco,nbco);
-                    }
-
-                    partie = get_brain_part_ind(my_rank*nb_ligne+i, &Cerveau);
-                    type = MatrixDebugInfo.types[my_rank*nb_ligne+i];
-                    nbco = MatrixDebugInfo.nb_connections[my_rank*nb_ligne+i];
-                    pourcentage_espere = get_mean_connect_percentage_for_part(&Cerveau, partie, type);
-                    sum_pourcentage_espere_local += pourcentage_espere;
-                    if (nb_ligne <= 64) //affichage seulement si le nombre de ligne par processus est inférieur ou égal à 64
-                    {
-                        printf(" type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f",type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
-                        printf("\n");
-                    }
-                }
+                printf("neurone %i, type: %i, partie: %i, nbconnections: %li, pourcentage obtenu: %.2f, pourcentage espéré : %.2f\n",i,type,partie,nbco,(double) nbco / (double) n * 100,pourcentage_espere);
             }
+            sum_pourcentage_espere += pourcentage_espere;
         }
-        MPI_Allreduce(&sum_pourcentage_espere_local, &sum_pourcentage_espere, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        MPI_Barrier(MPI_COMM_WORLD);
+        if (my_rank==0)
+        {
+            printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
+        }
     }
-    if (my_rank == 0)
-    {
-        printf("\nPourcentage global de valeurs non nulles : %.2f%",((double) nb_non_zeros/(double) size) * 100);
-        if (debug_cerveau) {printf(", pourcentage global espéré : %.2f%",sum_pourcentage_espere/ (double) n);}
-        printf("\n\n");
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
 
     if (my_rank == 0)
     {
-        if (debug || debug_cerveau || n <= 64)
+        if ((debug && debug_cerveau) || n <= 64)
         {
             printf("\nRésultat ");
             for(i=0;i<n;i++) {printf("%.4f ",new_q[i]);}
@@ -329,14 +364,13 @@ int main(int argc, char **argv)
 
     free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
     free(new_q); free(old_q);
-    free(local_types); free(neuron_types);
+    free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
     free(P_CSR.Value); //Row et Column communs avec la matrice CSR
 
     if (debug_cerveau)
     {
         free(MatrixDebugInfo.nb_connections); //MatrixDebugInfo.types est free plus haut : free(neuron_types);
-        free(nb_connections_local_tmp);
     }
     MPI_Finalize();
     return 0;

@@ -1,4 +1,4 @@
-/*PageRank non pondéré parallele utilisant le générateur V4 (Matrice parallèle avec blocks sur les ligne et les colonnes)*/
+/*PageRank non pondéré parallele utilisant le générateur V4 (Matrice parallèle avec blocks sur les ligne et les colonnes). Le vecteur résultat n'est pas distribué.*/
 /*Nicolas HOCHART*/
 
 #include <stdio.h>
