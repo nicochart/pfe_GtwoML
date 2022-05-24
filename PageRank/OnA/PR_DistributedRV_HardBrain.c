@@ -15,53 +15,6 @@
 
 #define NULL ((void *)0)
 
-/*---------------------------------
---- Opérations sur les vecteurs ---
----------------------------------*/
-
-int one_in_vector(double *vect, int size)
-{
-    //retourne 1 s'il y a un "1" dans le vecteur (permet de tester un cas particulier du PageRank lorsque beta = 1)
-    for (int i=0;i<size;i++)
-    {
-        if (vect[i] == 1.0) {return 1;}
-    }
-    return 0;
-}
-
-double vector_norm(double *vect, int size)
-{
-    /* somme les éléments du vecteur de doubles à l'adresse vect de taille size, et renvoie le résultat */
-    double sum=0;
-    for (int i=0;i<size;i++) {sum+=vect[i];}
-    return sum;
-}
-
-double abs_two_vector_error(double *vect1, double *vect2, int size)
-{
-    /*Calcul l'erreur entre deux vecteurs de taille "size"*/
-    double sum=0;
-    for (int i=0;i<size;i++) {sum += fabs(vect1[i] - vect2[i]);}
-    return sum;
-}
-
-void copy_vector_value(double *vect1, double *vect2, int size)
-{
-    /*Copie les valeurs du vecteur 1 dans le vecteur 2. Les deux vecteurs doivent être de taille "size".*/
-    for (int i=0;i<size;i++) {vect2[i] = vect1[i];}
-}
-
-/*---------------------
---- Mesure de temps ---
----------------------*/
-
-double my_gettimeofday()
-{
-    struct timeval tmp_time;
-    gettimeofday(&tmp_time, NULL);
-    return tmp_time.tv_sec + (tmp_time.tv_usec * 1.0e-6L);
-}
-
 /*----------------------
 --- Autres fonctions ---
 ----------------------*/
@@ -104,9 +57,8 @@ int main(int argc, char **argv)
 
     double grid_dim_factor; //utilisé seulement si debug_matrix_block = 1
     int local_result_vector_size_row_blocks,local_result_vector_size_column_blocks;
-    long local_result_vector_size;
 
-    double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
+    double start_brain_generation_time, total_brain_generation_time, total_pagerank_time, total_time;
 
     if (argc < 2)
     {
@@ -161,21 +113,6 @@ int main(int argc, char **argv)
     }
     local_result_vector_size_row_blocks = nb_blocks_row / pgcd(nb_blocks_row, nb_blocks_column);
     local_result_vector_size_column_blocks = nb_blocks_column / pgcd(nb_blocks_row, nb_blocks_column);
-    local_result_vector_size = local_result_vector_size_column_blocks * nb_colonne;
-
-    /* Communicateurs par ligne et colonne */
-    MPI_Comm ROW_COMM;
-    MPI_Comm_split(MPI_COMM_WORLD, myBlock.indl, myBlock.indc, &ROW_COMM);
-
-    MPI_Comm COLUMN_COMM;
-    MPI_Comm_split(MPI_COMM_WORLD, myBlock.indc, myBlock.indl, &COLUMN_COMM);
-
-    /* Communicateurs par groupe de calcul et de besoin du vecteur résultat (PageRank) */
-    MPI_Comm RV_CALC_GROUP_COMM; //communicateur interne des groupes (qui regroupe sur les colonnes les blocks du même groupe de calcul)
-    MPI_Comm_split(MPI_COMM_WORLD, myBlock.result_vector_calculation_group, myBlock.my_result_vector_calculation_group_rank, &RV_CALC_GROUP_COMM);
-
-    MPI_Comm INTER_RV_NEED_GROUP_COMM; //communicateur externe des groupes de besoin (groupes sur les lignes) ; permet de récupérer le résultat final
-    MPI_Comm_split(MPI_COMM_WORLD, myBlock.inter_result_vector_need_group_communicaton_group, my_rank, &INTER_RV_NEED_GROUP_COMM);
 
     MPI_Barrier(MPI_COMM_WORLD);
     if (my_rank == 0)
@@ -189,7 +126,7 @@ int main(int argc, char **argv)
     {
         printf("Taille locale du vecteur résultat : %i,%i blocks (ligne,colonne), soit %li cases mémoire\nFacteur nb_blocks_row/nb_blocks_column = %i/%i = %f, pgcd = %i\n\n",
         local_result_vector_size_row_blocks,local_result_vector_size_column_blocks, //Taille (en blocks)
-        local_result_vector_size, //Taille (en cases mémoires : local_result_vector_size_column_blocks*nb_colonne = local_result_vector_row_column_blocks*nb_ligne)
+        myBlock.local_result_vector_size, //Taille (en cases mémoires : local_result_vector_size_column_blocks*nb_colonne = local_result_vector_row_column_blocks*nb_ligne)
         nb_blocks_row,nb_blocks_column,grid_dim_factor,pgcd(nb_blocks_row, nb_blocks_column)); //Facteur
     }
     MPI_Barrier(MPI_COMM_WORLD);
@@ -287,107 +224,16 @@ int main(int argc, char **argv)
         }
     }
 
-    //Page Rank
-    double error_vect,error_vect_local,beta;
-    double *morceau_new_q,*morceau_new_q_local,*morceau_old_q,*tmp;
-    long cpt_iterations = 0;
+    //PageRank
     int maxIter = 10000;
     double epsilon = 0.00000000001;
+    double beta = 1;
 
-    //variables temporaires pour code parallèle
-    double to_add,sum_totale_old_q,sum_totale_new_q,sum_new_q,tmp_sum,sc;
-    int nb_elements_ligne;
-
-    //init variables PageRank
-    beta = 1; error_vect=INFINITY;
-    //allocation mémoire pour old_q et new_q, et initialisation de new_q
-    morceau_new_q = (double *)malloc(local_result_vector_size * sizeof(double));
-    morceau_new_q_local = (double *)malloc(local_result_vector_size * sizeof(double));
-    morceau_old_q = (double *)malloc(local_result_vector_size * sizeof(double));
-    for (i=0;i<local_result_vector_size;i++) {morceau_new_q[i] = (double) 1/n;}
-    sum_totale_new_q = n;
+    struct PageRankResult PRResult = pagerank_on_adjacency(&A_CSR, nb_connections_rows_global, n, myBlock, maxIter, beta, epsilon, debug);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    if (my_rank == 0) {printf("Running PageRank..\n");}
-    start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
-
-    /***************************************************************************************************************/
-    /****************************************** DEBUT ALGORITHME PAGERANK ******************************************/
-    /***************************************************************************************************************/
-    while (error_vect > epsilon && !one_in_vector(morceau_new_q,local_result_vector_size) && cpt_iterations<maxIter)
-    {
-        /************ Préparation pour l'itération ************/
-        if (my_rank == 0 && debug) {printf("Itération %i, error = %f\n",cpt_iterations,error_vect);}
-        //old_q <=> new_q  &   sum_totale_old_q <=> sum_totale_new_q
-        tmp = morceau_new_q;
-        morceau_new_q = morceau_old_q;
-        morceau_old_q = tmp;
-        tmp_sum = sum_totale_new_q;
-        sum_totale_new_q = sum_totale_old_q;
-        sum_totale_old_q = tmp_sum;
-        //les itérations se font sur new_q
-
-        //réinitialisation morceau_new_q_local pour nouvelle itération
-        for (i=0; i<local_result_vector_size; i++)
-        {
-            morceau_new_q_local[i] = 0;
-        }
-
-        /************ Produit matrice-vecteur ************/
-        //Produit matrice-vecteur new_q = P * old_q LOCAL
-        for(i=0; i<nb_ligne; i++)
-        {
-            nb_elements_ligne = nb_connections_rows_global[myBlock.startRow + i]; //le nombre d'éléments non nulles dans la ligne de la matrice "complète" (pas uniquement local)
-            sc = morceau_old_q[myBlock.startRow_in_result_vector_calculation_group + i] / (double) nb_elements_ligne; //décalage en lecture prit en compte avec startRow
-            for (j=A_CSR.Row[i]; j<A_CSR.Row[i+1]; j++) //décalage en écriture prit en compte avec startColumn
-            {
-                morceau_new_q_local[myBlock.startColumn_in_result_vector_calculation_group + A_CSR.Column[j]] += sc; //Produit matrice-vecteur local
-            }
-        }
-        
-        //Produit matrice-vecteur new_q = P * old_q GLOBAL (Reduce)
-        MPI_Allreduce(morceau_new_q_local, morceau_new_q, local_result_vector_size, MPI_DOUBLE, MPI_SUM, RV_CALC_GROUP_COMM); //Produit matrice_vecteur global : Reduce des morceaux de new_q dans tout les processus du même groupe de calcul
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /************ Amortissement ************/
-        //Multiplication du vecteur résultat par le facteur d'amortissement beta et ajout de norme(old_q) * (1-beta) / n
-        to_add = sum_totale_old_q * (1-beta)/n; //Ce qu'il y a à ajouter au résultat P.olq_q * beta. sum_total_old_q contient déjà la somme des éléments de old_q
-        for (k=myBlock.startColumn_in_result_vector_calculation_group; k<myBlock.startColumn_in_result_vector_calculation_group+nb_colonne; k++)
-        {
-            morceau_new_q_local[k] = morceau_new_q_local[k] * beta + to_add; //au fibal new_q = beta * P.old_q + norme(old_q) * (1-beta) / n    (la partie droite du + étant ajoutée à l'initialisation)
-        }
-
-        /************ Redistribution ************/
-        MPI_Bcast(morceau_new_q, local_result_vector_size, MPI_DOUBLE, myBlock.pr_result_redistribution_root, ROW_COMM); //chaque processus d'une s"ligne de processus" (dans la grille) contient le même morceau de new_q
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /************ Normalisation du nouveau vecteur résultat ************/
-        sum_new_q = 0;
-        for (i=0;i<local_result_vector_size;i++) {sum_new_q += morceau_new_q[i];}
-        MPI_Allreduce(&sum_new_q, &sum_totale_new_q, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes de tout les sum_new_q dans sum_totale_new_q, utile pour l'itération suivante
-        for (i=0;i<local_result_vector_size;i++) {morceau_new_q[i] *= 1/sum_totale_new_q;} //normalisation avec sum totale (tout processus confondu)
-
-        /************ Opérations de Fin d'itération ************/
-        cpt_iterations++;
-        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,nb_colonne); //calcul de l'erreur local
-        MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
-    /***************************************************************************************************************/
-    /******************************************* FIN ALGORITHME PAGERANK *******************************************/
-    /***************************************************************************************************************/
-    //cpt_iterations contient le nombre d'itérations faites, morceau_new_q sont les morceaux du vecteur contenant le PageRank
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
+    total_pagerank_time = PRResult.runtime;
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
-
-    double *pagerank_result;
-    if (debug_print_full_pagerank_result)
-    {
-        pagerank_result = (double *)malloc(n * sizeof(double));
-        MPI_Allgather(morceau_new_q, local_result_vector_size, MPI_DOUBLE, pagerank_result, local_result_vector_size, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans pagerank_result, dans tout les processus
-    }
 
     //affichage matrices
     if (debug_print_matrix)
@@ -428,23 +274,34 @@ int main(int argc, char **argv)
         printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
     }
 
-    if (my_rank == 0 && debug_print_full_pagerank_result)
+    double *pagerank_result;
+    if (debug_print_full_pagerank_result)
     {
-        printf("\nRésultat ");
-        for(i=0;i<n;i++) {printf("%.4f ",pagerank_result[i]);}
-        printf("obtenu en %i itérations\n",cpt_iterations);
+        /* Communicateur inter groupe de besoin */
+        MPI_Comm INTER_RV_NEED_GROUP_COMM; //communicateur externe des groupes de besoin (groupes sur les lignes) ; permet de récupérer le résultat final
+        MPI_Comm_split(MPI_COMM_WORLD, myBlock.inter_result_vector_need_group_communicaton_group, my_rank, &INTER_RV_NEED_GROUP_COMM);
+
+        pagerank_result = (double *)malloc(n * sizeof(double));
+        MPI_Allgather(PRResult.result, myBlock.local_result_vector_size, MPI_DOUBLE, pagerank_result, myBlock.local_result_vector_size, MPI_DOUBLE, INTER_RV_NEED_GROUP_COMM); //récupération par colonne des morceaux de new_q dans pagerank_result, dans tout les processus
+        if (my_rank == 0)
+        {
+            printf("\nRésultat ");
+            for(i=0;i<n;i++) {printf("%.4f ",pagerank_result[i]);}
+            printf("obtenu en %i itérations\n",PRResult.nb_iteration_done);
+        }
+        free(pagerank_result);
     }
     else if (my_rank == 0)
     {
         if ((debug && debug_cerveau) || n <= 64)
         {
             printf("\nMorceau du résultat dans le processus %i : ",my_rank);
-            for(i=0;i<nb_colonne;i++) {printf("%.4f ",morceau_new_q[i]);}
-            printf("obtenu en %i itérations\n",cpt_iterations);
+            for(i=0;i<nb_colonne;i++) {printf("%.4f ",PRResult.result[i]);}
+            printf("obtenu en %i itérations\n",PRResult.nb_iteration_done);
         }
         else
         {
-            printf("Morceau du vecteur résultat : %.4f %.4f ... %.4f obtenu en %i itérations\n",morceau_new_q[0],morceau_new_q[1],morceau_new_q[nb_colonne-1],cpt_iterations);
+            printf("Morceau du vecteur résultat : %.4f %.4f ... %.4f obtenu en %i itérations\n",PRResult.result[0],PRResult.result[1],PRResult.result[nb_colonne-1],PRResult.nb_iteration_done);
         }
     }
 
@@ -457,8 +314,7 @@ int main(int argc, char **argv)
     }
 
     free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
-    if (debug_print_full_pagerank_result) {free(pagerank_result);}
-    free(morceau_new_q); free(morceau_new_q_local); free(morceau_old_q);
+    free(PRResult.result);
     free(neuron_types); //Revient à faire MatrixDebugInfo.types est free plus haut
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
 

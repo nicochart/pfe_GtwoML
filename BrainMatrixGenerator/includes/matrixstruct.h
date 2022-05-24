@@ -76,6 +76,7 @@ typedef struct DoubleCSRMatrix DoubleCSRMatrix;
     PageRank info :
     Column index of the "root" block (source) of the communication-redistribution of the result vector,
     Result vector calculation group index
+    Local result vector size (elements)
     Row index of the block in the result vector calculation group
     Column index of the block in the result vector calculation group
     Need Inter-group Communication Group Index (useful for retrieving the final result)
@@ -96,6 +97,7 @@ struct MatrixBlock
 
     int pr_result_redistribution_root; //Indice de colonne du block "root" (source) de la communication-redistribution du vecteur résultat
     int result_vector_calculation_group; //Indice de groupe de calcul du vecteur résultat
+    long local_result_vector_size; //Taille locale du vecteur résultat du PageRank, en nombre d'éléments
     int indl_in_result_vector_calculation_group; //Indice de ligne du block dans le groupe de calcul du vecteur résultat
     int indc_in_result_vector_calculation_group; //Indice de colonne du block dans le groupe de calcul du vecteur résultat
     int inter_result_vector_need_group_communicaton_group; //Indice du Groupe de communication inter-groupe de besoin (utile pour récupérer le résultat final)
@@ -631,7 +633,7 @@ void printf_csr_matrix_int(IntCSRMatrix * M)
       MBlock.pr_result_redistribution_root = (int) MBlock.indl / grid_dim_factor;
       local_result_vector_size_column_blocks = nb_blocks_column /pgcd_nbr_nbc;
       local_result_vector_size_row_blocks = nb_blocks_row / pgcd_nbr_nbc;
-      local_result_vector_size_column = local_result_vector_size_column_blocks * MBlock.dim_c;
+      MBlock.local_result_vector_size = local_result_vector_size_column_blocks * MBlock.dim_c;
       MBlock.result_vector_calculation_group = MBlock.indc / local_result_vector_size_column_blocks;
       MBlock.indl_in_result_vector_calculation_group = MBlock.indl;
       MBlock.indc_in_result_vector_calculation_group = MBlock.indc % local_result_vector_size_column_blocks;
@@ -671,6 +673,7 @@ void printf_csr_matrix_int(IntCSRMatrix * M)
       MBlock.pr_result_redistribution_root = (int) MBlock.indc / grid_dim_factor;
       local_result_vector_size_column_blocks = nb_blocks_column / pgcd_nbr_nbc;
       local_result_vector_size_row_blocks = nb_blocks_row / pgcd_nbr_nbc;
+      MBlock.local_result_vector_size = local_result_vector_size_row_blocks * MBlock.dim_l;
       MBlock.result_vector_calculation_group = MBlock.indl / local_result_vector_size_row_blocks;
       MBlock.indl_in_result_vector_calculation_group = MBlock.indl % local_result_vector_size_row_blocks;
       MBlock.indc_in_result_vector_calculation_group = MBlock.indc;
