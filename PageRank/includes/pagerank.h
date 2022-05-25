@@ -1,5 +1,8 @@
-/* Structures et fonctions liées au PageRank */
-/*Nicolas HOCHART*/
+//! PageRank
+/*!
+  This file defines the structures and functions for PageRank.
+  Nicolas HOCHART
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +18,10 @@
 #include "../../BrainMatrixGenerator/includes/time_measure.h"
 #endif
 
+//! Structure containing the PageRank results.
+/*!
+   Structure containing the PageRank results, including : pagerank vector (piece), a runtime measurement, and the number of iterations done.
+ */
 struct PageRankResult
 {
      double * result; //PageRank
@@ -45,8 +52,20 @@ double abs_two_vector_error(double *vect1, double *vect2, int size)
     return sum;
 }
 
-//    int maxIter = 10000;
-//    double epsilon = 0.00000000001;
+//! Applies the PageRank algorithm on a CSR adjacency matrix
+/*!
+   Applies the PageRank algorithm on a CSR adjacency matrix, with the parameters passed.
+ * @param[in] A_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR adjacency matrix.
+ * @param[in] nnz_rows_global {long * [matrix_dim]} Pointer to a vector containing the global nnz (number of non-zero) per rows of the matrix
+ * @param[in] matrix_dim {long} matrix global dimension
+ * @param[in] BlockInfo {matrixstruct.h : MatrixBlock} structure containing information about the local mpi process ("block")
+ * @param[in] maxIter {int} max number of iteration to do
+ * @param[in] beta {double} dumping factor (pagerank parameter)
+ * @param[in] epsilon {double} max error (to study the convergence)
+ * @param[in] debug {boolean} debug option
+
+ * @return PRResult {PageRankResult} PageRank results : pagerank vector (piece), runtime measurement, number of iteration done
+ */
 PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global, long matrix_dim, MatrixBlock BlockInfo, int maxIter, double beta, double epsilon, int debug)
 {
     struct PageRankResult PRResult;
@@ -149,7 +168,7 @@ PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global
 
         /************ Opérations de Fin d'itération ************/
         cpt_iterations++;
-        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,BlockInfo.dim_c); //calcul de l'erreur local | TODO : edit BlockInfo.dim_c n'est pas la bonne longueur de vecteur, utiliser BlockInfo.local_result_vector_size
+        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,BlockInfo.local_result_vector_size); //calcul de l'erreur local
         MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
         MPI_Barrier(MPI_COMM_WORLD);
     }
@@ -170,7 +189,20 @@ PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global
     return PRResult;
 }
 
+//! Applies the PageRank algorithm on a CSR adjacency matrix
+/*!
+   Applies the PageRank algorithm on a CSR adjacency matrix, with the parameters passed.
+ * @param[in] A_CSR {matrixstruct.h : IntCSRMatrix *} Pointer to a structure corresponding to a CSR adjacency matrix.
+ * @param[in] nnz_columns_global {long * [matrix_dim]} Pointer to a vector containing the global nnz (number of non-zero) per rows of the matrix
+ * @param[in] matrix_dim {long} matrix global dimension
+ * @param[in] BlockInfo {matrixstruct.h : MatrixBlock} structure containing information about the local mpi process ("block")
+ * @param[in] maxIter {int} max number of iteration to do
+ * @param[in] beta {double} dumping factor (pagerank parameter)
+ * @param[in] epsilon {double} max error (to study the convergence)
+ * @param[in] debug {boolean} debug option
 
+ * @return PRResult {PageRankResult} PageRank results : pagerank vector (piece), runtime measurement, number of iteration done
+ */
 PageRankResult pagerank_on_transposed(IntCSRMatrix *A_CSR, long * nnz_columns_global, long matrix_dim, MatrixBlock BlockInfo, int maxIter, double beta, double epsilon, int debug)
 {
     struct PageRankResult PRResult;
@@ -272,7 +304,7 @@ PageRankResult pagerank_on_transposed(IntCSRMatrix *A_CSR, long * nnz_columns_gl
 
         /************ Opérations de Fin d'itération ************/
         cpt_iterations++;
-        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,BlockInfo.dim_c); //calcul de l'erreur local | TODO : edit BlockInfo.dim_c n'est pas la bonne longueur de vecteur, utiliser BlockInfo.local_result_vector_size
+        error_vect_local = abs_two_vector_error(morceau_new_q,morceau_old_q,BlockInfo.local_result_vector_size); //calcul de l'erreur local
         MPI_Allreduce(&error_vect_local, &error_vect, 1, MPI_DOUBLE, MPI_SUM, INTER_RV_NEED_GROUP_COMM); //somme MPI_SUM sur les colonnes des erreures locales pour avoir l'erreure totale
         MPI_Barrier(MPI_COMM_WORLD);
     }
