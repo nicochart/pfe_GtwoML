@@ -229,6 +229,7 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
     double beta = 1;
 
+    if (my_rank == 0) {printf("Running PageRank..\n");}
     struct PageRankResult PRResult = pagerank_on_adjacency(&A_CSR, nb_connections_rows_global, n, myBlock, maxIter, beta, epsilon, debug);
 
     MPI_Barrier(MPI_COMM_WORLD);

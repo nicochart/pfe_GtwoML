@@ -107,7 +107,6 @@ PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global
     sum_totale_new_q = matrix_dim;
 
     MPI_Barrier(MPI_COMM_WORLD);
-    if (my_mpi_rank == 0) {printf("Running PageRank..\n");}
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
 
     /***************************************************************************************************************/
@@ -244,7 +243,6 @@ PageRankResult pagerank_on_transposed(IntCSRMatrix *A_CSR, long * nnz_columns_gl
     sum_totale_new_q = matrix_dim;
 
     MPI_Barrier(MPI_COMM_WORLD);
-    if (my_mpi_rank == 0) {printf("\nRunning PageRank..\n");}
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
 
     /***************************************************************************************************************/

@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     double grid_dim_factor; //utilisé seulement si debug_matrix_block = 1
     int local_result_vector_size_row_blocks,local_result_vector_size_column_blocks;
 
-    double start_brain_generation_time, total_brain_generation_time, start_pagerank_time, total_pagerank_time, total_time;
+    double start_brain_generation_time, total_brain_generation_time, total_pagerank_time, total_time;
 
     if (argc < 2)
     {
@@ -229,10 +229,11 @@ int main(int argc, char **argv)
     double epsilon = 0.00000000001;
     double beta = 1;
 
+    if (my_rank == 0) {printf("Running PageRank..\n");}
     struct PageRankResult PRResult = pagerank_on_transposed(&A_CSR, nb_connections_columns_global, n, myBlock, maxIter, beta, epsilon, debug);
 
     MPI_Barrier(MPI_COMM_WORLD);
-    total_pagerank_time = my_gettimeofday() - start_pagerank_time; //fin de la mesure de temps de calcul pour PageRank
+    total_pagerank_time = PRResult.runtime;
     total_time = my_gettimeofday() - start_brain_generation_time; //fin de la mesure de temps globale (début génération matrice -> fin pagerank)
 
     //affichage matrices
