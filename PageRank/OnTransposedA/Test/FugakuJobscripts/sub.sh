@@ -1,0 +1,10 @@
+pjsub 1N.sh
+pjsub 4N.sh
+pjsub 16N.sh
+pjsub 64N.sh
+pjsub 256N.sh
+pjsub 1N_NoTorus.sh
+pjsub 4N_NoTorus.sh
+pjsub 16N_NoTorus.sh
+pjsub 64N_NoTorus.sh
+pjsub 256N_NoTorus.sh
