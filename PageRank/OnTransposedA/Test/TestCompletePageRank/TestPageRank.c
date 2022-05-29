@@ -33,7 +33,7 @@ int pgcd(int a, int b)
 
 int main(int argc, char **argv)
 {
-    int my_rank, p, valeur, tag = 0;
+    int my_rank, p;
     MPI_Status status;
 
     //Initialisation MPI
@@ -43,17 +43,13 @@ int main(int argc, char **argv)
 
     int debug=0; //passer à 1 pour afficher les print de débuggage
     int debug_cerveau=0; //passer à 1 pour avoir les print de débuggage liés aux pourcentages de connexion du cerveau
-    int debug_matrix_block=1; //passer à 1 pour afficher les print de débuggage du block de matrice
-    int debug_full_pagerank_result=0; //passer à 1 pour allgather et afficher le vecteur résultat complet
-    int debug_print_matrix=0; //passer à 1 pour afficher les matrices dans les processus
-    long i,j,k; //pour les boucles
+    long i; //pour les boucles
     long n;
     int q = sqrt(p);
     int nb_blocks_row = q, nb_blocks_column = q; //q est la valeur par défaut du nombre de blocks dans les deux dimensions. q*q = p blocs utilisés
     struct MatrixBlock myBlock; //contiendra toutes les information du block (processus) local
     long long size;
-    long total_memory_allocated_local,nb_zeros,nb_non_zeros,nb_non_zeros_local;
-    long *nb_connections_local_tmp,*nb_connections_tmp;
+    long nb_non_zeros,nb_non_zeros_local;
     int *neuron_types;
 
     double min_time, max_time, sum_time;
@@ -114,6 +110,10 @@ int main(int argc, char **argv)
         printf("----------------------\nBilan de votre matrice :\n");
         printf("Taille : %li * %li = %li\n",n,n,size);
         printf("%i blocs sur les lignes (avec %li lignes par bloc) et %i blocs sur les colonnes (avec %li colonnes par bloc)\n",nb_blocks_row,nb_ligne,nb_blocks_column,nb_colonne);
+
+        printf("Place mémoire totale moyenne utilisée par la matrice : %.2f o (%.2f Go) (Cerveau 35%) ou %.2f o (%.2f Go) (Cerveau 3.5%) ou %.2f o (%.2f Go) (Cerveau 0.35%).\n", (double) 3 * 0.35*size *4, (double) 3 * 0.35*size *4 / 1000000000, (double) 3 * 0.035*size *4, (double) 3 * 0.035*size *4 / 1000000000, (double) 3 * 0.0035*size *4, (double) 3 * 0.0035*size *4 / 1000000000);
+        printf("Place mémoire locale moyenne utilisée par la matrice : %.2f o (%.2f Go) (Cerveau 35%) ou %.2f o (%.2f Go) (Cerveau 3.5%) ou %.2f o (%.2f Go) (Cerveau 0.35%).\n", (double) 3 * 0.35*size *4 / p, (double) 3 * 0.35*size *4 / 1000000000 / p, (double) 3 * 0.035*size *4 / p, (double) 3 * 0.035*size *4 / 1000000000 / p, (double) 3 * 0.0035*size *4 / p, (double) 3 * 0.0035*size *4 / 1000000000 / p);
+        printf("Place mémoire locale utilisée par le vecteur neuron_types : %i o (%.2f Go)\n", n*4, (double) n*4 / 1000000000);
     }
 
     //Cerveau écrit en dur
@@ -135,7 +135,7 @@ int main(int argc, char **argv)
 
     for (i=0;i<nb_blocks_row;i++)
     {
-        MPI_Bcast(neuron_types + /*adresse de lecture/ecriture : le ind_block_row dans lequel on est actuellement * nb_ligne*/ i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
+        MPI_Bcast(neuron_types + i*nb_ligne, nb_ligne, MPI_INT, i*nb_blocks_column, MPI_COMM_WORLD);
     }
 
     //Génération de la matrice CSR à partir du cerveau
@@ -165,7 +165,6 @@ int main(int argc, char **argv)
     }
 
     int partie, type;
-    long nbco;
     double pourcentage_espere, sum_pourcentage_espere;
     for(i=0;i<n;i++) // Parcours des neurones
     {
@@ -178,6 +177,10 @@ int main(int argc, char **argv)
     {
         printf("\nPourcentage global de valeurs non nulles : %.2f%, pourcentage global espéré : %.2f%\n\n",((double) nb_non_zeros/(double) size) * 100,sum_pourcentage_espere/ (double) n);
     }
+
+    //Libération des éléments utilisés lors de la génération de la matrice
+    free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
+    free(neuron_types);
 
     //Page Rank
     int maxIter = 10000;
@@ -202,11 +205,7 @@ int main(int argc, char **argv)
     if (my_rank == 0) {printf("Temps moyen écoulé lors d'un pagerank : %.5f s\nTemps minimum écoulé lors d'un pagerank : %.5f s\nTemps maximum écoulé lors d'un pagerank : %.5f s\n", sum_time / nb_iteration_done, min_time, max_time);}
 
     MPI_Barrier(MPI_COMM_WORLD);
-
-    free_brain(&Cerveau); //free du cerveau, fonction définie dans brainstruct.h
-    free(neuron_types);
     free(A_CSR.Row); free(A_CSR.Column); free(A_CSR.Value);
-
     free(nb_connections_columns_global); //free MatrixDebugInfo.nb_connections si debug_cerveau à 1
 
     MPI_Finalize();
