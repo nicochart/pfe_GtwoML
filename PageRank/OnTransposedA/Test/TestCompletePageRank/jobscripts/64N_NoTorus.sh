@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#PJM -N "J4N_NoTorus"
-#PJM -L "node=4"
+#PJM -N "J64N_NoTorus"
+#PJM -L "node=64"
 #PJM -L "rscgrp=small"
 #PJM -L "elapse=60:00"
 #PJM --mpi "max-proc-per-node=1"
@@ -10,4 +10,4 @@
 #PJM -o logs/%n.%j.out
 #PJM --spath logs/%n.%j.out.stat
 
-mpiexec -n 4 testcom 25000 2 2
+mpiexec -n 64 pagerank 1200000 8 8

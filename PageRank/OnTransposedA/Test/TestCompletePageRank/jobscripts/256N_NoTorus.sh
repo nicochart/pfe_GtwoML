@@ -10,4 +10,4 @@
 #PJM -o logs/%n.%j.out
 #PJM --spath logs/%n.%j.out.stat
 
-mpiexec -n 256 testcom 200000 16 16
+mpiexec -n 256 pagerank 2400000 16 16

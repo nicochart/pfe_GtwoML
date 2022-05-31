@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#PJM -N "J256N"
-#PJM -L "node=16x25:torus"
-#PJM -L "rscgrp=large"
+#PJM -N "J4N"
+#PJM -L "node=2x2:torus"
+#PJM -L  "rscgrp=small-torus"
 #PJM -L "elapse=60:00"
 #PJM --mpi "max-proc-per-node=1"
 #PJM -s
@@ -10,4 +10,4 @@
 #PJM -o logs/%n.%j.out
 #PJM --spath logs/%n.%j.out.stats
 
-mpiexec -n 256 testcom 200000 16 16
+mpiexec -n 4 pagerank 300000 2 2
