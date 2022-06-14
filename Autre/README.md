@@ -1,0 +1,22 @@
+# Dossier contenant des essais
+Ces fichiers ont permis d'expérimenter, faire avancer les codes. Ils sont maintenant outdated, mais permettent encore de mieux visualiser ce qui est utilisé dans le générateur ou dans le PageRank.
+- MethodeDeLaPuissance :
+	- Sequential : Code séquentiel
+	- Parallel_1 : Code parallèle sans Spread-With-Add, sans OpenMP
+	- Parallel_2 : Code parallèle avec Spread-With-Add, sans OpenMP
+	- FromAdjascencyMatrix : Code parallèle basé sur une matrice creuse au format CSR type matrice de passage P (0 ou 1) pour le PageRank.
+	- Gpu : Code cuda 3 kernels (premier essai)
+- PageRankSequentiel :
+	- Algorithmes du PageRank en séquentiel
+- TestsGenerator :
+	- Premières versions du générateur BTIDG2 (https://github.com/SMG2S/BTIDG2)
+	- DemoCerveau : Essais et démonstration des structures (représentant le cerveau) que nous utilisons
+- TestsMatriceCreuse : Essais sur la génération, le stockage et l'accès aux valeurs de matrices creuses
+	- DenseToCSR_double : Premier essai - traduction d'une matrice de doubles (stockée normalement) en CSR
+	- DenseToCooToCsr : Génération aléatoire d'une matrice stockée normalement, conversion en COO, puis conversion COO -> CSR.
+	- CSRMatrixForPageRank : Préparation d'une matrice CSR pour PageRank
+- TestsMPI :
+	- tests_communicateurs : tests sur les communicateurs par ligne et colonne dans une grille de processus 2D MPI. (aide à la compréhension des communicateurs)
+	- tests_parallelisation : tests sur la parallélision dans une grille de processus (ligne et colonne) de la génération de la matrice. (aide à la compréhension)
+- TestsOpenMP :
+	- MP_Parallel_2_OMP : Code parallèle de la Méthode de la puissance, avec Spread-With-Add, avec du OpenMP
