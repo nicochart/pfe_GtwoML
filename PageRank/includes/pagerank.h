@@ -104,7 +104,7 @@ PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global
     morceau_new_q_local = (double *)malloc(BlockInfo.local_result_vector_size * sizeof(double));
     morceau_old_q = (double *)malloc(BlockInfo.local_result_vector_size * sizeof(double));
     for (i=0;i<BlockInfo.local_result_vector_size;i++) {morceau_new_q[i] = (double) 1/matrix_dim;}
-    sum_totale_new_q = matrix_dim;
+    sum_totale_new_q = 1;
 
     MPI_Barrier(MPI_COMM_WORLD);
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
@@ -240,7 +240,7 @@ PageRankResult pagerank_on_transposed(IntCSRMatrix *A_CSR, long * nnz_columns_gl
     morceau_new_q_local = (double *)malloc(BlockInfo.local_result_vector_size * sizeof(double));
     morceau_old_q = (double *)malloc(BlockInfo.local_result_vector_size * sizeof(double));
     for (i=0;i<BlockInfo.local_result_vector_size;i++) {morceau_new_q[i] = (double) 1/matrix_dim;}
-    sum_totale_new_q = matrix_dim;
+    sum_totale_new_q = 1;
 
     MPI_Barrier(MPI_COMM_WORLD);
     start_pagerank_time = my_gettimeofday(); //Début de la mesure de temps pour le PageRank
