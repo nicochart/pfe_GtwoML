@@ -184,6 +184,7 @@ PageRankResult pagerank_on_adjacency(IntCSRMatrix *A_CSR, long * nnz_rows_global
     PRResult.nb_iteration_done = cpt_iterations;
 
     free(morceau_new_q_local); free(morceau_old_q);
+    MPI_Comm_free(&ROW_COMM); MPI_Comm_free(&COLUMN_COMM); MPI_Comm_free(&RV_CALC_GROUP_COMM); MPI_Comm_free(&INTER_RV_NEED_GROUP_COMM);
 
     return PRResult;
 }
@@ -319,6 +320,7 @@ PageRankResult pagerank_on_transposed(IntCSRMatrix *A_CSR, long * nnz_columns_gl
     PRResult.nb_iteration_done = cpt_iterations;
 
     free(morceau_new_q_local); free(morceau_old_q);
+    MPI_Comm_free(&ROW_COMM); MPI_Comm_free(&COLUMN_COMM); MPI_Comm_free(&RV_CALC_GROUP_COMM); MPI_Comm_free(&INTER_RV_NEED_GROUP_COMM);
 
     return PRResult;
 }
